@@ -17,18 +17,19 @@ class GDaxBook(WebsocketClient):
         self._sequence = -1
         self._current_ticker = None
 
+
     def on_message(self, message):
-        sequence = message['sequence']
+        sequence = message['sequence'] # Sequence status
         if self._sequence == -1:
             self._asks = RBTree()
             self._bids = RBTree()
-            res = self._client.get_product_order_book(self.product,level=3)
+            res = self._client.get_product_order_book(self.product,level=3) # Gdax oder book data
             for bid in res['bids']:
                 self.add({
-                    'id': bid[2],
-                    'side': 'buy',
-                    'price': Decimal(bid[0]),
-                    'size': Decimal(bid[1])
+                    'id': bid[2], 
+                    'side': 'buy', 
+                    'price': Decimal(bid[0]), 
+                    'size': Decimal(bid[1]) 
                 })
             for ask in res['asks']:
                 self.add({
@@ -48,7 +49,7 @@ class GDaxBook(WebsocketClient):
             self.start()
             return
 
-        msg_type = message['type']
+        msg_type = message['type'] # Type status
         if msg_type == 'open':
             self.add(message)
         elif msg_type == 'done' and 'price' in message:
@@ -76,10 +77,10 @@ class GDaxBook(WebsocketClient):
 
     def add(self, order):
         order = {
-            'id': order.get('order_id') or order['id'],
-            'side': order['side'],
-            'price': Decimal(order['price']),
-            'size': Decimal(order.get('size') or order['remaining_size'])
+            'id': order.get('order_id') or order['id'], # Order id data
+            'side': order['side'], # Order side data
+            'price': Decimal(order['price']), # Order price data
+            'size': Decimal(order.get('size') or order['remaining_size']) # Order size data
         }
         if order['side'] == 'buy':
             bids = self.get_bids(order['price'])
