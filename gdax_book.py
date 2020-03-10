@@ -2,8 +2,11 @@ from operator import itemgetter
 from bintrees import RBTree
 from decimal import Decimal
 import pickle
+
+# Coinbase Pypi 
 from cbpro.public_client import PublicClient
 from cbpro.websocket_client import WebsocketClient
+
 
 class GDaxBook(WebsocketClient):
     def __init__(self, product_id='BTC-USD'):
@@ -11,19 +14,36 @@ class GDaxBook(WebsocketClient):
         self.product = product_id
         super(GDaxBook, self).__init__(products=[self.product])
         super(GDaxBook, self).start()
+
+
         self._asks = RBTree()
         self._bids = RBTree()
+
+        # Initialize exchange data
         self._client = PublicClient()
         self._sequence = -1
         self._current_ticker = None
 
 
+    # On data receipt
+    # __on_message equivalent on ws_bitmex.py
     def on_message(self, message):
+
+        # Coinbase data comes with sequence label
         sequence = message['sequence'] # Sequence status
+
+        # If this is our first entry on sequence
         if self._sequence == -1:
+
+            # Updating RB trees
             self._asks = RBTree()
             self._bids = RBTree()
+
+            # Orderbook bulk data
             res = self._client.get_product_order_book(self.product,level=3) # Gdax oder book data
+
+
+            # Structured differently from Bitmex - returns separate bids and asks
             for bid in res['bids']:
                 self.add({
                     'id': bid[2], 
@@ -49,6 +69,7 @@ class GDaxBook(WebsocketClient):
             self.start()
             return
 
+        # Order status
         msg_type = message['type'] # Type status
         if msg_type == 'open':
             self.add(message)
@@ -71,10 +92,23 @@ class GDaxBook(WebsocketClient):
         # print('bid: %f @ %f - ask: %f @ %f' % (bid_depth, bid, ask_depth, ask))
 
     def on_error(self, e):
+        # Reset sequence
         self._sequence = -1
+        # Reset
         self.close()
         self.start()
 
+
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------Macro functions to manipulate RBTrees-------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
+			
+
+
+
+
+    # Add order to out watched orders
     def add(self, order):
         order = {
             'id': order.get('order_id') or order['id'], # Order id data
@@ -97,6 +131,7 @@ class GDaxBook(WebsocketClient):
                 asks.append(order)
             self.set_asks(order['price'], asks)
 
+    # Order is done, remove it from watched orders
     def remove(self, order):
         price = Decimal(order['price'])
         if order['side'] == 'buy':
@@ -116,6 +151,7 @@ class GDaxBook(WebsocketClient):
                 else:
                     self.remove_asks(price)
 
+    # Associating found order on orderbook with order side, double checking
     def match(self, order):
         size = Decimal(order['size'])
         price = Decimal(order['price'])
@@ -141,6 +177,7 @@ class GDaxBook(WebsocketClient):
                 asks[0]['size'] -= size
                 self.set_asks(price, asks)
 
+    # Updating order price and size
     def change(self, order):
         new_size = Decimal(order['new_size'])
         price = Decimal(order['price'])
@@ -166,9 +203,19 @@ class GDaxBook(WebsocketClient):
         if node is None or not any(o['id'] == order['order_id'] for o in node):
             return
 
+
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
+    # ------------------------------------------Functions to get and format data from exchange-------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
+	
+
+    # Actual exchange price
     def get_current_ticker(self):
         return self._current_ticker
 
+
+    # Analyse how ordebook is processed
     def get_current_book(self):
         result = {
             'sequence': self._sequence,
@@ -196,15 +243,28 @@ class GDaxBook(WebsocketClient):
                 result['bids'].append([order['price'], order['size'], order['id']])
         return result
 
+
+
+
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------Micro functions to manipulate RBTrees-------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
+			
+
+    # Get current minimum ask price from tree
     def get_ask(self):
         return self._asks.min_key()
 
+    # Get mean ask price
     def get_asks(self, price):
         return self._asks.get(price)
 
+    # Remove price form tree
     def remove_asks(self, price):
         self._asks.remove(price)
 
+    # Insert price into tree
     def set_asks(self, price, asks):
         self._asks.insert(price, asks)
 
@@ -220,7 +280,7 @@ class GDaxBook(WebsocketClient):
     def set_bids(self, price, bids):
         self._bids.insert(price, bids)
 
-
+# Main loop
 if __name__ == '__main__':
     import time
     wsClient = WebsocketClient()
