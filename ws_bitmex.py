@@ -273,4 +273,3 @@ def order_leaves_quantity(o):
     if o['leavesQty'] is None:
         return True
     return o['leavesQty'] > 0
-© 2020 GitHub, Inc.
