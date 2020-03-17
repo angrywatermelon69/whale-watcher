@@ -104,6 +104,64 @@ class BitMEXWebsocket:
         '''Get recent trades.'''
         return self.data['trade']
 
+    
+    #####################################################
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------Bitmex Data Fields--------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
+    def get_last_orderid(self):
+        orderbook = self.data["orderBookL2"]
+        last_orderid = [order['id'] for order in orderbook]
+        return last_orderid[-1]
+
+    def get_ask_price(self):
+        orderbook = self.data["orderBookL2"]
+        order_asks = [order for order in orderbook if order['side']  == 'Sell']
+        price_asks = [order['price'] for order in order_asks]
+        return min(price_asks)
+
+    def get_largest_ask(self):
+        orderbook = self.data["orderBookL2"]
+        order_asks = [order for order in orderbook if order['side']  == 'Sell']
+        largest_ask = [order['size'] for order in order_asks]
+        return max(largest_ask)
+
+    def get_largest_bid(self):
+        orderbook = self.data["orderBookL2"]
+        order_bids = [order for order in orderbook if order['side']  == 'Buy']
+        size_bids = [order['size'] for order in order_bids]
+        return max(size_bids)
+
+    def get_trade_price(self):
+        last_trade = self.data['trade']
+        price_trade = [order['price'] for order in last_trade]
+        return price_trade[-1]
+
+    def get_volume(self):
+        instrument = self.data['instrument']
+        volume = instrument['instrument'][0]['volume']
+        return volume
+
+    def get_bid_price(self):
+        orderbook = self.data['orderBookL2']
+        order_bids = [order for order in orderbook if order['side']  == 'Buy']
+        price_bids = [order['price'] for order in order_bids]
+        return max(price_bids)
+    
+    def get_ask_price2(self):
+        ask_prices = self.data['quote'][-1]['askPrice']
+        return ask_prices   
+
+    def get_volume24h(self):
+        volume24h = self.data['instrument'][0]['volume24h']
+        return volume24h
+
+    def get_prevprice24h(self):
+        prevprice24h = self.data['instrument'][0]['prevPrice24h']
+        return prevprice24h
+
+    #####################################################
     #
     # End Public Methods
     #
