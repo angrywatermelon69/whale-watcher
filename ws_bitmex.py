@@ -34,7 +34,7 @@ MAX_TABLE_LEN = 200
 
 class BitMEXWebsocket:
 
-    def __init__(self, endpoint, symbol, api_key=None, api_secret=None):
+    def __init__(self, endpoint="https://www.bitmex.com/api/v1", symbol='XBTUSD', api_key=None, api_secret=None):
         '''Connect to the websocket and initialize data stores.'''
         self.logger = logging.getLogger(__name__)
         self.logger.debug("Initializing WebSocket.")

@@ -11,8 +11,7 @@ def run():
     logger = setup_logger()
 
     # Instantiating the WS will make it connect.
-    # ws = BitMEXWebsocket(endpoint="https://testnet.bitmex.com/api/v1", symbol="XBTUSD",
-    ws = BitMEXWebsocket(endpoint="https://testnet.bitmex.com/api/v1", symbol="XBTUSD")
+    ws = BitMEXWebsocket()
 
     #logger.info("Instrument data: %s" % ws.get_whole_instrument())
     #ws.set_logSize()
