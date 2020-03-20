@@ -1,3 +1,20 @@
+# -*- coding: utf-8 -*-
+
+# - OrderBook Websocket Thread -
+# 🦏 **** quan.digital **** 🦏
+
+# authors: canokaue & thomgabriel
+# date: 03/2020
+# kaue@engineer.com
+
+# Simplified implementation of connecting to BitMEX websocket for streaming realtime orderbook data.
+
+# Code based on stock Bitmex API connectors - https://github.com/BitMEX/api-connectors/tree/master/official-ws/python
+
+# The Websocket offers a bunch of data as raw properties right on the object.
+# On connect, it synchronously asks for a push of all this data then returns.
+# Docs: https://www.bitmex.com/app/wsAPI
+
 import websocket
 import threading
 import traceback
@@ -6,21 +23,16 @@ import json
 import logging
 import urllib
 import math
-from api_key import generate_nonce, generate_signature
+from decimal import Decimal
+from bintrees import RBTree
 
+# Websocket timeout in seconds
+CONN_TIMEOUT = 5
 
-# Naive implementation of connecting to BitMEX websocket for streaming realtime data.
-# The Marketmaker still interacts with this as if it were a REST Endpoint, but now it can get
-# much more realtime data without polling the hell out of the API.
-#
-# The Websocket offers a bunch of data as raw properties right on the object.
-# On connect, it synchronously asks for a push of all this data then returns.
-# Right after, the MM can start using its data. It will be updated in realtime, so the MM can
-# poll really often if it wants.
+# Don't grow a table larger than this amount. Helps cap memory usage.
+MAX_TABLE_LEN = 200
+
 class BitMEXWebsocket:
-
-    # Don't grow a table larger than this amount. Helps cap memory usage.
-    MAX_TABLE_LEN = 200
 
     def __init__(self, endpoint, symbol, api_key=None, api_secret=None):
         '''Connect to the websocket and initialize data stores.'''
@@ -41,6 +53,8 @@ class BitMEXWebsocket:
         self.data = {}
         self.keys = {}
         self.exited = False
+        self._asks = RBTree()
+        self._bids = RBTree()
 
         # We can subscribe right in the connection querystring, so let's build that.
         # Subscribe to all pertinent endpoints
@@ -55,16 +69,52 @@ class BitMEXWebsocket:
             self.__wait_for_account()
         self.logger.info('Got all market data. Starting.')
 
+    def init(self):
+        self.logger.debug("Initializing WebSocket...")
+
+        self.data = {}
+        self.keys = {}
+        self.exited = False
+
+        wsURL = self.__get_url()
+        self.logger.info("Connecting to URL -- %s" % wsURL)
+        self.__connect(wsURL, self.symbol)
+        self.logger.info('Connected to WS.')
+
+        # Connected. Wait for partials
+        self.__wait_for_symbol(self.symbol)
+        if self.api_key:
+            self.__wait_for_account()
+        self.logger.info('Got all market data. Starting.')
+
+    def error(self, err):
+        self._error = err
+        self.logger.error(err)
+        #self.exit()
+
+    def __del__(self):
+        self.exit()
+
+    def reset(self):
+        self.logger.warning('Websocket resetting...')
+        self.ws.close()
+        self.logger.info('Weboscket closed.')
+        self.logger.info('Restarting...')
+        self.init()
+
     def exit(self):
         '''Call this to exit - will close websocket.'''
         self.exited = True
         self.ws.close()
 
+    # -----------------------------------------------------------------------------------------
+    # ----------------------Bitmex Data Fields-------------------------------------------------
+    # -----------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------
+
     def get_instrument(self):
         '''Get the raw instrument data for this symbol.'''
-        # Turn the 'tickSize' into 'tickLog' for use in rounding
         instrument = self.data['instrument'][0]
-        instrument['tickLog'] = int(math.fabs(math.log10(instrument['tickSize'])))
         return instrument
 
     def get_ticker(self):
@@ -80,40 +130,13 @@ class BitMEXWebsocket:
 
         # The instrument has a tickSize. Use it to round values.
         instrument = self.data['instrument'][0]
-        return {k: round(float(v or 0), instrument['tickLog']) for k, v in ticker.items()}
-
-    def funds(self):
-        '''Get your margin details.'''
-        return self.data['margin'][0]
-
-    def positions(self):
-        '''Get your positions.'''
-        return self.data['position']
+        return {k: toNearest(float(v or 0), instrument['tickSize']) for k, v in ticker.items()}
 
     def market_depth(self):
-        '''Get market depth (orderbook). Returns all levels.'''
+        '''Get whole market depth (orderbook). Returns all levels.'''
         return self.data['orderBookL2']
-
-    def open_orders(self, clOrdIDPrefix):
-        '''Get all your open orders.'''
-        orders = self.data['order']
-        # Filter to only open orders and those that we actually placed
-        return [o for o in orders if str(o['clOrdID']).startswith(clOrdIDPrefix) and order_leaves_quantity(o)]
-
-    def recent_trades(self):
-        '''Get recent trades.'''
-        return self.data['trade']
-
-    
-    #####################################################
-    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
-    # ---------------------------------------------------Bitmex Data Fields--------------------------------------------------------------------------------------
-    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
-    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
-    def get_last_orderid(self):
-        orderbook = self.data["orderBookL2"]
-        last_orderid = [order['id'] for order in orderbook]
-        return last_orderid[-1]
+   
+    ### Ask (sell) functions
 
     def get_ask_price(self):
         orderbook = self.data["orderBookL2"]
@@ -126,12 +149,32 @@ class BitMEXWebsocket:
         order_asks = [order for order in orderbook if order['side']  == 'Sell']
         largest_ask = [order['size'] for order in order_asks]
         return max(largest_ask)
+    
+    def get_ask_prices(self):
+        orderbook = self.data["orderBookL2"]
+        ask_prices = [order['price'] for order in orderbook if order['side']  == 'Sell']
+        return ask_prices
+
+    ### Bid (buy) functions
+
+    def get_bid_price(self):
+        orderbook = self.data['orderBookL2']
+        order_bids = [order for order in orderbook if order['side']  == 'Buy']
+        price_bids = [order['price'] for order in order_bids]
+        return max(price_bids)
 
     def get_largest_bid(self):
         orderbook = self.data["orderBookL2"]
         order_bids = [order for order in orderbook if order['side']  == 'Buy']
         size_bids = [order['size'] for order in order_bids]
         return max(size_bids)
+
+    def get_bid_prices(self):
+        orderbook = self.data["orderBookL2"]
+        bid_prices = [order['price'] for order in orderbook if order['side']  == 'Buy']
+        return bid_prices
+
+    ### Miscelaneous Bitmex data functions
 
     def get_trade_price(self):
         last_trade = self.data['trade']
@@ -142,17 +185,7 @@ class BitMEXWebsocket:
         instrument = self.data['instrument']
         volume = instrument['instrument'][0]['volume']
         return volume
-
-    def get_bid_price(self):
-        orderbook = self.data['orderBookL2']
-        order_bids = [order for order in orderbook if order['side']  == 'Buy']
-        price_bids = [order['price'] for order in order_bids]
-        return max(price_bids)
     
-    def get_ask_price2(self):
-        ask_prices = self.data['quote'][-1]['askPrice']
-        return ask_prices   
-
     def get_volume24h(self):
         volume24h = self.data['instrument'][0]['volume24h']
         return volume24h
@@ -161,10 +194,10 @@ class BitMEXWebsocket:
         prevprice24h = self.data['instrument'][0]['prevPrice24h']
         return prevprice24h
 
-    #####################################################
-    #
-    # End Public Methods
-    #
+    # -----------------------------------------------------------------------------------------
+    # ----------------------WS Private Methods-------------------------------------------------
+    # -----------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------
 
     def __connect(self, wsURL, symbol):
         '''Connect to the websocket in a thread.'''
@@ -183,7 +216,7 @@ class BitMEXWebsocket:
         self.logger.debug("Started thread")
 
         # Wait for connect before continuing
-        conn_timeout = 5
+        conn_timeout = CONN_TIMEOUT
         while (not self.ws.sock or not self.ws.sock.connected) and conn_timeout:
             sleep(1)
             conn_timeout -= 1
@@ -192,34 +225,15 @@ class BitMEXWebsocket:
             self.exit()
             raise websocket.WebSocketTimeoutException('Couldn\'t connect to WS! Exiting.')
 
-    def __get_auth(self):
-        '''Return auth headers. Will use API Keys if present in settings.'''
-        if self.api_key:
-            self.logger.info("Authenticating with API Key.")
-            # To auth to the WS using an API key, we generate a signature of a nonce and
-            # the WS API endpoint.
-            expires = generate_nonce()
-            return [
-                "api-expires: " + str(expires),
-                "api-signature: " + generate_signature(self.api_secret, 'GET', '/realtime', expires, ''),
-                "api-key:" + self.api_key
-            ]
-        else:
-            self.logger.info("Not authenticating.")
-            return []
-
     def __get_url(self):
         '''
         Generate a connection URL. We can define subscriptions right in the querystring.
         Most subscription topics are scoped by the symbol we're listening to.
         '''
 
-        # You can sub to orderBookL2 for all levels, or orderBook10 for top 10 levels & save bandwidth
-        symbolSubs = ["execution", "instrument", "order", "orderBookL2", "position", "quote", "trade"]
-        genericSubs = ["margin"]
+        symbolSubs = ["instrument", "orderBookL2", "quote", "trade"]
 
         subscriptions = [sub + ':' + self.symbol for sub in symbolSubs]
-        subscriptions += genericSubs
 
         urlParts = list(urllib.parse.urlparse(self.endpoint))
         urlParts[0] = urlParts[0].replace('http', 'ws')
@@ -229,7 +243,7 @@ class BitMEXWebsocket:
     def __wait_for_account(self):
         '''On subscribe, this data will come down. Wait for it.'''
         # Wait for the keys to show up from the ws
-        while not {'margin', 'position', 'order', 'orderBookL2'} <= set(self.data):
+        while not {'orderBookL2'} <= set(self.data):
             sleep(0.1)
 
     def __wait_for_symbol(self, symbol):
@@ -263,20 +277,21 @@ class BitMEXWebsocket:
                 # 'insert'  - new row
                 # 'update'  - update row
                 # 'delete'  - delete row
+
                 if action == 'partial':
                     self.logger.debug("%s: partial" % table)
                     self.data[table] = message['data']
                     # Keys are communicated on partials to let you know how to uniquely identify
                     # an item. We use it for updates.
                     self.keys[table] = message['keys']
+
                 elif action == 'insert':
                     self.logger.debug('%s: inserting %s' % (table, message['data']))
                     self.data[table] += message['data']
-
                     # Limit the max length of the table to avoid excessive memory usage.
                     # Don't trim orders because we'll lose valuable state if we do.
-                    if table not in ['order', 'orderBookL2'] and len(self.data[table]) > BitMEXWebsocket.MAX_TABLE_LEN:
-                        self.data[table] = self.data[table][BitMEXWebsocket.MAX_TABLE_LEN // 2:]
+                    if table not in ['orderBookL2'] and len(self.data[table]) > MAX_TABLE_LEN:
+                        self.data[table] = self.data[table][MAX_TABLE_LEN // 2:]
 
                 elif action == 'update':
                     self.logger.debug('%s: updating %s' % (table, message['data']))
@@ -286,9 +301,7 @@ class BitMEXWebsocket:
                         if not item:
                             return  # No item found to update. Could happen before push
                         item.update(updateData)
-                        # Remove cancelled / filled orders
-                        if table == 'order' and not order_leaves_quantity(item):
-                            self.data[table].remove(item)
+
                 elif action == 'delete':
                     self.logger.debug('%s: deleting %s' % (table, message['data']))
                     # Locate the item in the collection and remove it.
@@ -318,16 +331,21 @@ class BitMEXWebsocket:
 # Utility method for finding an item in the store.
 # When an update comes through on the websocket, we need to figure out which item in the array it is
 # in order to match that item.
-#
 # Helpfully, on a data push (or on an HTTP hit to /api/v1/schema), we have a "keys" array. These are the
-# fields we can use to uniquely identify an item. Sometimes there is more than one, so we iterate through all
-# provided keys.
+# fields we can use to uniquely identify an item. Sometimes there is more than one, so we iterate through 
+# all provided keys.
 def find_by_keys(keys, table, matchData):
     for item in table:
         if all(item[k] == matchData[k] for k in keys):
             return item
 
-def order_leaves_quantity(o):
-    if o['leavesQty'] is None:
-        return True
-    return o['leavesQty'] > 0
+# Given a number, round it to the nearest tick. 
+# Use this after adding/subtracting/multiplying numbers.
+# More reliable than round()
+def toNearest(num, tickSize = 1):
+    tickDec = Decimal(str(tickSize))
+    return float((Decimal(round(num / tickSize, 0)) * tickDec))
+
+# Satoshi to XBT converter
+def XBt_to_XBT(XBt):
+    return float(XBt) / 100000000
