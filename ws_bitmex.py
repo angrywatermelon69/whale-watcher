@@ -207,8 +207,7 @@ class BitMEXWebsocket:
                                          on_message=self.__on_message,
                                          on_close=self.__on_close,
                                          on_open=self.__on_open,
-                                         on_error=self.__on_error,
-                                         header=self.__get_auth())
+                                         on_error=self.__on_error)
 
         self.wst = threading.Thread(target=lambda: self.ws.run_forever())
         self.wst.daemon = True

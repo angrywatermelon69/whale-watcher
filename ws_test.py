@@ -1,5 +1,4 @@
 from ws_bitmex import BitMEXWebsocket
-import secret as keys
 import logging
 from time import sleep
 import json
@@ -11,10 +10,9 @@ from decimal import Decimal
 def run():
     logger = setup_logger()
 
-    # Instantiating the WS will make it connect. Be sure to add your api_key/api_secret.
+    # Instantiating the WS will make it connect.
     # ws = BitMEXWebsocket(endpoint="https://testnet.bitmex.com/api/v1", symbol="XBTUSD",
-    ws = BitMEXWebsocket(endpoint="https://testnet.bitmex.com/api/v1", symbol="XBTUSD",
-                         api_key=keys.bitmex_key, api_secret=keys.bitmex_secret)
+    ws = BitMEXWebsocket(endpoint="https://testnet.bitmex.com/api/v1", symbol="XBTUSD")
 
     #logger.info("Instrument data: %s" % ws.get_whole_instrument())
     #ws.set_logSize()
@@ -32,7 +30,6 @@ def run():
         #     json.dump(orderbook_data, json_file)
     
         print(ws.get_ask_price())
-        print(ws.get_ask_price2())
         sleep(2)
 
         
