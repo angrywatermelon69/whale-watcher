@@ -5,7 +5,7 @@
 
 # authors: canokaue & thomgabriel
 # date: 03/2020
-# kaue@engineer.com
+# kaue.cano@quan.digital
 
 # Simplified implementation of connecting to BitMEX websocket for streaming realtime orderbook data.
 
@@ -25,6 +25,7 @@ import urllib
 import math
 from decimal import Decimal
 from bintrees import RBTree
+from operator import itemgetter
 
 # Websocket timeout in seconds
 CONN_TIMEOUT = 5
@@ -32,23 +33,19 @@ CONN_TIMEOUT = 5
 # Don't grow a table larger than this amount. Helps cap memory usage.
 MAX_TABLE_LEN = 200
 
+# Get other data besides orderBookL2 (instrument, quote and trade). 
+# Set to 'False' to reduce bandwidth and optimize performance. 
+OTHER_DATA = True
+
 class BitMEXWebsocket:
 
-    def __init__(self, endpoint="https://www.bitmex.com/api/v1", symbol='XBTUSD', api_key=None, api_secret=None):
+    def __init__(self, endpoint="https://www.bitmex.com/api/v1", symbol='XBTUSD'):
         '''Connect to the websocket and initialize data stores.'''
         self.logger = logging.getLogger(__name__)
         self.logger.debug("Initializing WebSocket.")
 
         self.endpoint = endpoint
         self.symbol = symbol
-
-        if api_key is not None and api_secret is None:
-            raise ValueError('api_secret is required if api_key is provided')
-        if api_key is None and api_secret is not None:
-            raise ValueError('api_key is required if api_secret is provided')
-
-        self.api_key = api_key
-        self.api_secret = api_secret
 
         self.data = {}
         self.keys = {}
@@ -61,13 +58,14 @@ class BitMEXWebsocket:
         wsURL = self.__get_url()
         self.logger.info("Connecting to %s" % wsURL)
         self.__connect(wsURL, symbol)
-        self.logger.info('Connected to WS.')
+        self.logger.info('Connected to WS, waiting for partials.')
 
         # Connected. Wait for partials
         self.__wait_for_symbol(symbol)
-        if api_key:
-            self.__wait_for_account()
         self.logger.info('Got all market data. Starting.')
+
+        # Instrument data for tickSize
+        self.instrument = self.get_instrument()
 
     def init(self):
         self.logger.debug("Initializing WebSocket...")
@@ -79,12 +77,10 @@ class BitMEXWebsocket:
         wsURL = self.__get_url()
         self.logger.info("Connecting to URL -- %s" % wsURL)
         self.__connect(wsURL, self.symbol)
-        self.logger.info('Connected to WS.')
+        self.logger.info('Connected to WS, waiting for partials.')
 
         # Connected. Wait for partials
         self.__wait_for_symbol(self.symbol)
-        if self.api_key:
-            self.__wait_for_account()
         self.logger.info('Got all market data. Starting.')
 
     def error(self, err):
@@ -114,23 +110,29 @@ class BitMEXWebsocket:
 
     def get_instrument(self):
         '''Get the raw instrument data for this symbol.'''
-        instrument = self.data['instrument'][0]
-        return instrument
+        if OTHER_DATA:
+            instrument = self.data['instrument'][0]
+            return instrument
+        else:
+            return None
 
     def get_ticker(self):
         '''Return a ticker object. Generated from quote and trade.'''
-        lastQuote = self.data['quote'][-1]
-        lastTrade = self.data['trade'][-1]
-        ticker = {
-            "last": lastTrade['price'],
-            "buy": lastQuote['bidPrice'],
-            "sell": lastQuote['askPrice'],
-            "mid": (float(lastQuote['bidPrice'] or 0) + float(lastQuote['askPrice'] or 0)) / 2
-        }
+        if OTHER_DATA:
+            lastQuote = self.data['quote'][-1]
+            lastTrade = self.data['trade'][-1]
+            ticker = {
+                "last": lastTrade['price'],
+                "buy": lastQuote['bidPrice'],
+                "sell": lastQuote['askPrice'],
+                "mid": (float(lastQuote['bidPrice'] or 0) + float(lastQuote['askPrice'] or 0)) / 2
+            }
 
-        # The instrument has a tickSize. Use it to round values.
-        instrument = self.data['instrument'][0]
-        return {k: toNearest(float(v or 0), instrument['tickSize']) for k, v in ticker.items()}
+            # The instrument has a tickSize. Use it to round values.
+            instrument = self.data['instrument'][0]
+            return {k: toNearest(float(v or 0), instrument['tickSize']) for k, v in ticker.items()}
+        else:
+            return None
 
     def market_depth(self):
         '''Get whole market depth (orderbook). Returns all levels.'''
@@ -177,22 +179,142 @@ class BitMEXWebsocket:
     ### Miscelaneous Bitmex data functions
 
     def get_trade_price(self):
-        last_trade = self.data['trade']
-        price_trade = [order['price'] for order in last_trade]
-        return price_trade[-1]
+        if OTHER_DATA:
+            last_trade = self.data['trade']
+            price_trade = [order['price'] for order in last_trade]
+            return price_trade[-1]
+        else:
+            return None
 
     def get_volume(self):
-        instrument = self.data['instrument']
-        volume = instrument['instrument'][0]['volume']
-        return volume
-    
+        if OTHER_DATA:
+            instrument = self.data['instrument']
+            volume = instrument['instrument'][0]['volume']
+            return volume
+        else:
+            return None
+
     def get_volume24h(self):
-        volume24h = self.data['instrument'][0]['volume24h']
-        return volume24h
+        if OTHER_DATA:
+            volume24h = self.data['instrument'][0]['volume24h']
+            return volume24h
+        else:
+            return None
 
     def get_prevprice24h(self):
-        prevprice24h = self.data['instrument'][0]['prevPrice24h']
-        return prevprice24h
+        if OTHER_DATA:
+            prevprice24h = self.data['instrument'][0]['prevPrice24h']
+            return prevprice24h
+        else:
+            return None
+
+    # -----------------------------------------------------------------------------------------
+    # ----------------------RBTrees Handling---------------------------------------------------
+    # -----------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------
+
+
+    # Get current minimum ask price from tree
+    def get_ask(self):
+        return self._asks.min_key()
+
+    # Get ask given price
+    def get_asks(self, price):
+        return self._asks.get(price)
+
+    # Remove ask form tree
+    def remove_asks(self, price):
+        self._asks.remove(price)
+
+    # Insert ask into tree
+    def set_asks(self, price, asks):
+        self._asks.insert(price, asks)
+
+    # Get current maximum bid price from tree
+    def get_bid(self):
+        return self._bids.max_key()
+
+    # Get bid given price
+    def get_bids(self, price):
+        return self._bids.get(price)
+
+    # Remove bid form tree
+    def remove_bids(self, price):
+        self._bids.remove(price)
+
+    # Insert bid into tree
+    def set_bids(self, price, bids):
+        self._bids.insert(price, bids)
+
+    # Add order to out watched orders
+    def add(self, order):
+        order = {
+            'id': order['id'], # Order id data
+            'side': order['side'], # Order side data
+            'size': Decimal(order['size']), # Order size data
+            'price': toNearest(order['price'], self.instrument['tickSize'] or 1) # Order price data
+        }
+        if order['side'] == 'Buy':
+            bids = self.get_bids(order['price'])
+            if bids is None:
+                bids = [order]
+            else:
+                bids.append(order)
+            self.set_bids(order['price'], bids)
+        else:
+            asks = self.get_asks(order['price'])
+            if asks is None:
+                asks = [order]
+            else:
+                asks.append(order)
+            self.set_asks(order['price'], asks)
+
+    # Order is done, remove it from watched orders
+    def remove(self, order):
+        price = Decimal(order['price'])
+        if order['side'] == 'Buy':
+            bids = self.get_bids(price)
+            if bids is not None:
+                bids = [o for o in bids if o['id'] != order['id']]
+                if len(bids) > 0:
+                    self.set_bids(price, bids)
+                else:
+                    self.remove_bids(price)
+        else:
+            asks = self.get_asks(price)
+            if asks is not None:
+                asks = [o for o in asks if o['id'] != order['id']]
+                if len(asks) > 0:
+                    self.set_asks(price, asks)
+                else:
+                    self.remove_asks(price)
+
+    # Updating order price and size
+    def change(self, order):
+        new_size = Decimal(order['size'])
+        # Bitmex updates don't come with price, so we use the id to match it instead
+        price = Decimal(order['id'])
+
+        if order['side'] == 'Buy':
+            bids = self.get_bids(price)
+            if bids is None or not any(o['id'] == order['id'] for o in bids):
+                return
+            index = map(itemgetter('id'), bids).index(order['id'])
+            bids[index]['size'] = new_size
+            self.set_bids(price, bids)
+        else:
+            asks = self.get_asks(price)
+            if asks is None or not any(o['id'] == order['id'] for o in asks):
+                return
+            index = map(itemgetter('id'), asks).index(order['id'])
+            asks[index]['size'] = new_size
+            self.set_asks(price, asks)
+
+        tree = self._asks if order['side'] == 'Sell' else self._bids
+        node = tree.get(price)
+
+        if node is None or not any(o['id'] == order['id'] for o in node):
+            return
 
     # -----------------------------------------------------------------------------------------
     # ----------------------WS Private Methods-------------------------------------------------
@@ -229,8 +351,10 @@ class BitMEXWebsocket:
         Generate a connection URL. We can define subscriptions right in the querystring.
         Most subscription topics are scoped by the symbol we're listening to.
         '''
-
-        symbolSubs = ["instrument", "orderBookL2", "quote", "trade"]
+        if OTHER_DATA:
+            symbolSubs = ["instrument", "orderBookL2", "quote", "trade"]
+        else:
+            symbolSubs = ["orderBookL2"]
 
         subscriptions = [sub + ':' + self.symbol for sub in symbolSubs]
 
@@ -239,16 +363,14 @@ class BitMEXWebsocket:
         urlParts[2] = "/realtime?subscribe={}".format(','.join(subscriptions))
         return urllib.parse.urlunparse(urlParts)
 
-    def __wait_for_account(self):
-        '''On subscribe, this data will come down. Wait for it.'''
-        # Wait for the keys to show up from the ws
-        while not {'orderBookL2'} <= set(self.data):
-            sleep(0.1)
-
     def __wait_for_symbol(self, symbol):
         '''On subscribe, this data will come down. Wait for it.'''
-        while not {'instrument', 'trade', 'quote'} <= set(self.data):
-            sleep(0.1)
+        if OTHER_DATA:
+            while not {'orderBookL2', 'instrument', 'trade', 'quote'} <= set(self.data):
+                sleep(0.1)
+        else:
+            while not {'orderBookL2'} <= set(self.data):
+                sleep(0.1)
 
     def __send_command(self, command, args=None):
         '''Send a raw command.'''
@@ -266,7 +388,7 @@ class BitMEXWebsocket:
         try:
             if 'subscribe' in message:
                 self.logger.debug("Subscribed to %s." % message['subscribe'])
-            elif action:
+            elif action and OTHER_DATA:
 
                 if table not in self.data:
                     self.data[table] = []
@@ -309,6 +431,26 @@ class BitMEXWebsocket:
                         self.data[table].remove(item)
                 else:
                     raise Exception("Unknown action: %s" % action)
+
+            # RBTrees for orderBook
+            if table == 'orderBookL2':
+                # For every order received
+                for order in message['data']:
+                    if action == 'partial':
+                        self.logger.debug('%s: adding partial %s' % (table, order))
+                        self.add(order)
+                    elif action == 'insert':
+                        self.logger.debug('%s: inserting %s' % (table, order))
+                        self.add(order)
+                    elif action == 'update':
+                        self.logger.debug('%s: updating %s' % (table, order))
+                        self.change(order)
+                    elif action == 'delete':
+                        self.logger.debug('%s: deleting %s' % (table, order))
+                        self.remove(order)
+                    else:
+                        raise Exception("Unknown action: %s" % action)
+
         except:
             self.logger.error(traceback.format_exc())
 
