@@ -29,6 +29,7 @@ import math
 from decimal import Decimal
 from bintrees import RBTree
 from operator import itemgetter
+from tqdm import tqdm
 
 # Websocket timeout in seconds
 CONN_TIMEOUT = 5
@@ -37,9 +38,12 @@ CONN_TIMEOUT = 5
 MAX_TABLE_LEN = 200
 
 # Get other data besides orderBookL2 (instrument, quote and trade). 
-# When False, data will only be handled as RBTrees (bids and asks).
 # Set to 'False' to reduce bandwidth and optimize performance. 
 OTHER_DATA = False
+
+# When True, data will only be handled as RBTrees (bids and asks).
+# When False, orderBookL2 data will also be stored as dict.
+RB_ONLY = True
 
 class BitMEXBook:
 
@@ -47,6 +51,10 @@ class BitMEXBook:
         '''Connect to the websocket and initialize data stores.'''
         self.logger = logging.getLogger(__name__)
         self.logger.debug("Initializing WebSocket.")
+
+        # If we're getting other websocket data, RB_ONLY must be false
+        if OTHER_DATA and RB_ONLY:
+            raise Exception('OTHER_DATA and RB_ONLY can\'t be both true.')
 
         self.endpoint = endpoint
         self.symbol = symbol
@@ -67,9 +75,6 @@ class BitMEXBook:
         # Connected. Wait for partials
         self.__wait_for_symbol(symbol)
         self.logger.info('Got all market data. Starting.')
-
-        # Instrument data for tickSize
-        self.instrument = self.get_instrument()
 
     def init(self):
         self.logger.debug("Initializing WebSocket...")
@@ -133,7 +138,7 @@ class BitMEXBook:
             }
 
             # The instrument has a tickSize. Use it to round values.
-            instrument = self.data['instrument'][0]
+            instrument = self.get_instrument()[0]
             return {k: toNearest(float(v or 0), instrument['tickSize']) for k, v in ticker.items()}
         else:
             return None
@@ -141,14 +146,47 @@ class BitMEXBook:
     def market_depth(self):
         '''Get whole market depth (orderbook). Returns all levels.'''
         return self.data['orderBookL2']
-   
+
+    def get_trade_price(self):
+        if OTHER_DATA:
+            last_trade = self.data['trade']
+            price_trade = [order['price'] for order in last_trade]
+            return price_trade[-1]
+        else:
+            return None
+
+    def get_volume(self):
+        if OTHER_DATA:
+            instrument = self.data['instrument']
+            volume = instrument['instrument'][0]['volume']
+            return volume
+        else:
+            return None
+
+    def get_volume24h(self):
+        if OTHER_DATA:
+            volume24h = self.data['instrument'][0]['volume24h']
+            return volume24h
+        else:
+            return None
+
+    def get_prevprice24h(self):
+        if OTHER_DATA:
+            prevprice24h = self.data['instrument'][0]['prevPrice24h']
+            return prevprice24h
+        else:
+            return None
+
     ### Ask (sell) functions
 
-    def get_ask_price(self):
-        orderbook = self.data["orderBookL2"]
-        order_asks = [order for order in orderbook if order['side']  == 'Sell']
-        price_asks = [order['price'] for order in order_asks]
-        return min(price_asks)
+    def get_ask_price(self, fromTree = True):
+        if OTHER_DATA or not fromTree:
+            orderbook = self.data["orderBookL2"]
+            order_asks = [order for order in orderbook if order['side']  == 'Sell']
+            price_asks = [order['price'] for order in order_asks]
+            return min(price_asks)
+        else:
+            return self._asks.min_item()[1][0]['price']
 
     def get_largest_ask(self):
         orderbook = self.data["orderBookL2"]
@@ -180,37 +218,32 @@ class BitMEXBook:
         bid_prices = [order['price'] for order in orderbook if order['side']  == 'Buy']
         return bid_prices
 
-    ### Miscelaneous Bitmex data functions
+    ### Main orderbook function
 
-    def get_trade_price(self):
-        if OTHER_DATA:
-            last_trade = self.data['trade']
-            price_trade = [order['price'] for order in last_trade]
-            return price_trade[-1]
-        else:
-            return None
+    def get_current_book(self):
+        result = {
+            'asks': [],
+            'bids': []
+        }
+        for ask in self._asks:
+            try:
+                # There can be a race condition here, where a price point is removed
+                # between these two ops
+                this_ask = self._asks[ask]
+            except KeyError:
+                continue
+            for order in this_ask:
+                result['asks'].append([order['price'], order['size'], order['id']])
+        # Same procedure for bids
+        for bid in self._bids:
+            try:
+                this_bid = self._bids[bid]
+            except KeyError:
+                continue
 
-    def get_volume(self):
-        if OTHER_DATA:
-            instrument = self.data['instrument']
-            volume = instrument['instrument'][0]['volume']
-            return volume
-        else:
-            return None
-
-    def get_volume24h(self):
-        if OTHER_DATA:
-            volume24h = self.data['instrument'][0]['volume24h']
-            return volume24h
-        else:
-            return None
-
-    def get_prevprice24h(self):
-        if OTHER_DATA:
-            prevprice24h = self.data['instrument'][0]['prevPrice24h']
-            return prevprice24h
-        else:
-            return None
+            for order in this_bid:
+                result['bids'].append([order['price'], order['size'], order['id']])
+        return result
 
     # -----------------------------------------------------------------------------------------
     # ----------------------RBTrees Handling---------------------------------------------------
@@ -255,8 +288,7 @@ class BitMEXBook:
             'id': order['id'], # Order id data
             'side': order['side'], # Order side data
             'size': Decimal(order['size']), # Order size data
-            'price': toNearest(order['price'], self.instrument['tickSize'] or 1) if OTHER_DATA \
-                else order['price'] # Order price data
+            'price': order['price'] # Order price data
         }
         if order['side'] == 'Buy':
             bids = self.get_bids(order['price'])
@@ -369,12 +401,18 @@ class BitMEXBook:
 
     def __wait_for_symbol(self, symbol):
         '''On subscribe, this data will come down. Wait for it.'''
+        pbar = tqdm(total=160)
         if OTHER_DATA:
+            # Wait for every subscription
             while not {'orderBookL2', 'instrument', 'trade', 'quote'} <= set(self.data):
                 sleep(0.1)
+                pbar.update(3)
         else:
-            while not {'orderBookL2'} <= set(self.data):
+            # Wait until data reaches our RBTrees
+            while self._asks.is_empty():
                 sleep(0.1)
+                pbar.update(3)
+        pbar.close()
 
     def __send_command(self, command, args=None):
         '''Send a raw command.'''
@@ -390,10 +428,10 @@ class BitMEXBook:
         table = message.get("table")
         action = message.get("action")
         try:
-            if OTHER_DATA:
+            if not RB_ONLY:
                 if 'subscribe' in message:
                     self.logger.debug("Subscribed to %s." % message['subscribe'])
-                elif action and OTHER_DATA:
+                elif action:
 
                     if table not in self.data:
                         self.data[table] = []
@@ -457,9 +495,9 @@ class BitMEXBook:
                         else:
                             raise Exception("Unknown action: %s" % action)
                 except:
-                    self.logger.error('Error handling RBTrees')
+                    self.logger.error('Error handling RBTrees: %s' % traceback.format_exc())
 
-            # # Uncomment this to watch RBTrees evolution in real time 
+            # Uncomment this to watch RBTrees evolution in real time 
             # self.logger.info('==============================================================')
             # self.logger.info('=============================ASKS=============================')
             # self.logger.info('==============================================================')
