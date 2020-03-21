@@ -409,7 +409,7 @@ class BitMEXBook:
                 pbar.update(3)
         else:
             # Wait until data reaches our RBTrees
-            while self._asks.is_empty():
+            while self._asks.is_empty() and self._bids.is_empty():
                 sleep(0.1)
                 pbar.update(3)
         pbar.close()
