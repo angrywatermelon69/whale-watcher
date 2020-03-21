@@ -1,4 +1,4 @@
-from ws_bitmex import BitMEXWebsocket
+from bitmex_book import BitMEXBook
 import logging
 from time import sleep
 import json
@@ -11,7 +11,7 @@ def run():
     logger = setup_logger()
 
     # Instantiating the WS will make it connect.
-    ws = BitMEXWebsocket()
+    ws = BitMEXBook()
 
     #logger.info("Instrument data: %s" % ws.get_whole_instrument())
     #ws.set_logSize()
@@ -37,10 +37,9 @@ def run():
 def setup_logger():
     # Prints logger info to terminal
     logger = logging.getLogger()
-   
     
-    logger.setLevel(logging.DEBUG)  # Change this to DEBUG if you want a lot more info
-    #logger.setLevel(logging.INFO)
+    #logger.setLevel(logging.DEBUG)  # Change this to DEBUG if you want a lot more info
+    logger.setLevel(logging.INFO)
     ch = logging.StreamHandler()
     # create formatter
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")

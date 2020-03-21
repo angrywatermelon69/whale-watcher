@@ -8,8 +8,11 @@
 # kaue.cano@quan.digital
 
 # Simplified implementation of connecting to BitMEX websocket for streaming realtime orderbook data.
+# Optimized for OrderBookL2 handling using Red and Black Binary Search Trees - https://www.programiz.com/dsa/red-black-tree
+# Originally developed for Quan Digital's Whale Watcher project - https://github.com/quan-digital/whale-watcher
 
-# Code based on stock Bitmex API connectors - https://github.com/BitMEX/api-connectors/tree/master/official-ws/python
+# Code based on stock Bitmex API connectors - https://github.com/BitMEX/api-connectors/tree/master/official-ws/python/bitmex_websocket.py
+# As well as pmaji's GDAX OrderBook thread - https://github.com/pmaji/crypto-whale-watching-app/blob/master/gdax_book.py
 
 # The Websocket offers a bunch of data as raw properties right on the object.
 # On connect, it synchronously asks for a push of all this data then returns.
@@ -30,14 +33,15 @@ from operator import itemgetter
 # Websocket timeout in seconds
 CONN_TIMEOUT = 5
 
-# Don't grow a table larger than this amount. Helps cap memory usage.
+# It's recommended not to grow a table larger than 200. Helps cap memory usage.
 MAX_TABLE_LEN = 200
 
 # Get other data besides orderBookL2 (instrument, quote and trade). 
+# When False, data will only be handled as RBTrees (bids and asks).
 # Set to 'False' to reduce bandwidth and optimize performance. 
-OTHER_DATA = True
+OTHER_DATA = False
 
-class BitMEXWebsocket:
+class BitMEXBook:
 
     def __init__(self, endpoint="https://www.bitmex.com/api/v1", symbol='XBTUSD'):
         '''Connect to the websocket and initialize data stores.'''
@@ -213,7 +217,6 @@ class BitMEXWebsocket:
     # -----------------------------------------------------------------------------------------
     # -----------------------------------------------------------------------------------------
 
-
     # Get current minimum ask price from tree
     def get_ask(self):
         return self._asks.min_key()
@@ -252,7 +255,8 @@ class BitMEXWebsocket:
             'id': order['id'], # Order id data
             'side': order['side'], # Order side data
             'size': Decimal(order['size']), # Order size data
-            'price': toNearest(order['price'], self.instrument['tickSize'] or 1) # Order price data
+            'price': toNearest(order['price'], self.instrument['tickSize'] or 1) if OTHER_DATA \
+                else order['price'] # Order price data
         }
         if order['side'] == 'Buy':
             bids = self.get_bids(order['price'])
@@ -271,47 +275,47 @@ class BitMEXWebsocket:
 
     # Order is done, remove it from watched orders
     def remove(self, order):
-        price = Decimal(order['price'])
+        oid = order['id']
         if order['side'] == 'Buy':
-            bids = self.get_bids(price)
+            bids = self.get_bids(oid)
             if bids is not None:
                 bids = [o for o in bids if o['id'] != order['id']]
                 if len(bids) > 0:
-                    self.set_bids(price, bids)
+                    self.set_bids(oid, bids)
                 else:
-                    self.remove_bids(price)
+                    self.remove_bids(oid)
         else:
-            asks = self.get_asks(price)
+            asks = self.get_asks(oid)
             if asks is not None:
                 asks = [o for o in asks if o['id'] != order['id']]
                 if len(asks) > 0:
-                    self.set_asks(price, asks)
+                    self.set_asks(oid, asks)
                 else:
-                    self.remove_asks(price)
+                    self.remove_asks(oid)
 
     # Updating order price and size
     def change(self, order):
         new_size = Decimal(order['size'])
         # Bitmex updates don't come with price, so we use the id to match it instead
-        price = Decimal(order['id'])
+        oid = order['id']
 
         if order['side'] == 'Buy':
-            bids = self.get_bids(price)
+            bids = self.get_bids(oid)
             if bids is None or not any(o['id'] == order['id'] for o in bids):
                 return
             index = map(itemgetter('id'), bids).index(order['id'])
             bids[index]['size'] = new_size
-            self.set_bids(price, bids)
+            self.set_bids(oid, bids)
         else:
-            asks = self.get_asks(price)
+            asks = self.get_asks(oid)
             if asks is None or not any(o['id'] == order['id'] for o in asks):
                 return
             index = map(itemgetter('id'), asks).index(order['id'])
             asks[index]['size'] = new_size
-            self.set_asks(price, asks)
+            self.set_asks(oid, asks)
 
         tree = self._asks if order['side'] == 'Sell' else self._bids
-        node = tree.get(price)
+        node = tree.get(oid)
 
         if node is None or not any(o['id'] == order['id'] for o in node):
             return
@@ -386,70 +390,84 @@ class BitMEXWebsocket:
         table = message.get("table")
         action = message.get("action")
         try:
-            if 'subscribe' in message:
-                self.logger.debug("Subscribed to %s." % message['subscribe'])
-            elif action and OTHER_DATA:
+            if OTHER_DATA:
+                if 'subscribe' in message:
+                    self.logger.debug("Subscribed to %s." % message['subscribe'])
+                elif action and OTHER_DATA:
 
-                if table not in self.data:
-                    self.data[table] = []
+                    if table not in self.data:
+                        self.data[table] = []
 
-                # There are four possible actions from the WS:
-                # 'partial' - full table image
-                # 'insert'  - new row
-                # 'update'  - update row
-                # 'delete'  - delete row
+                    # There are four possible actions from the WS:
+                    # 'partial' - full table image
+                    # 'insert'  - new row
+                    # 'update'  - update row
+                    # 'delete'  - delete row
 
-                if action == 'partial':
-                    self.logger.debug("%s: partial" % table)
-                    self.data[table] = message['data']
-                    # Keys are communicated on partials to let you know how to uniquely identify
-                    # an item. We use it for updates.
-                    self.keys[table] = message['keys']
+                    if action == 'partial':
+                        self.logger.debug("%s: partial" % table)
+                        self.data[table] = message['data']
+                        # Keys are communicated on partials to let you know how to uniquely identify
+                        # an item. We use it for updates.
+                        self.keys[table] = message['keys']
 
-                elif action == 'insert':
-                    self.logger.debug('%s: inserting %s' % (table, message['data']))
-                    self.data[table] += message['data']
-                    # Limit the max length of the table to avoid excessive memory usage.
-                    # Don't trim orders because we'll lose valuable state if we do.
-                    if table not in ['orderBookL2'] and len(self.data[table]) > MAX_TABLE_LEN:
-                        self.data[table] = self.data[table][MAX_TABLE_LEN // 2:]
+                    elif action == 'insert':
+                        self.logger.debug('%s: inserting %s' % (table, message['data']))
+                        self.data[table] += message['data']
+                        # Limit the max length of the table to avoid excessive memory usage.
+                        # Don't trim orders because we'll lose valuable state if we do.
+                        if table not in ['orderBookL2'] and len(self.data[table]) > MAX_TABLE_LEN:
+                            self.data[table] = self.data[table][MAX_TABLE_LEN // 2:]
 
-                elif action == 'update':
-                    self.logger.debug('%s: updating %s' % (table, message['data']))
-                    # Locate the item in the collection and update it.
-                    for updateData in message['data']:
-                        item = find_by_keys(self.keys[table], self.data[table], updateData)
-                        if not item:
-                            return  # No item found to update. Could happen before push
-                        item.update(updateData)
+                    elif action == 'update':
+                        self.logger.debug('%s: updating %s' % (table, message['data']))
+                        # Locate the item in the collection and update it.
+                        for updateData in message['data']:
+                            item = find_by_keys(self.keys[table], self.data[table], updateData)
+                            if not item:
+                                return  # No item found to update. Could happen before push
+                            item.update(updateData)
 
-                elif action == 'delete':
-                    self.logger.debug('%s: deleting %s' % (table, message['data']))
-                    # Locate the item in the collection and remove it.
-                    for deleteData in message['data']:
-                        item = find_by_keys(self.keys[table], self.data[table], deleteData)
-                        self.data[table].remove(item)
-                else:
-                    raise Exception("Unknown action: %s" % action)
+                    elif action == 'delete':
+                        self.logger.debug('%s: deleting %s' % (table, message['data']))
+                        # Locate the item in the collection and remove it.
+                        for deleteData in message['data']:
+                            item = find_by_keys(self.keys[table], self.data[table], deleteData)
+                            self.data[table].remove(item)
+                    else:
+                        raise Exception("Unknown action: %s" % action)
 
             # RBTrees for orderBook
             if table == 'orderBookL2':
                 # For every order received
-                for order in message['data']:
-                    if action == 'partial':
-                        self.logger.debug('%s: adding partial %s' % (table, order))
-                        self.add(order)
-                    elif action == 'insert':
-                        self.logger.debug('%s: inserting %s' % (table, order))
-                        self.add(order)
-                    elif action == 'update':
-                        self.logger.debug('%s: updating %s' % (table, order))
-                        self.change(order)
-                    elif action == 'delete':
-                        self.logger.debug('%s: deleting %s' % (table, order))
-                        self.remove(order)
-                    else:
-                        raise Exception("Unknown action: %s" % action)
+                try:
+                    for order in message['data']:
+                        if action == 'partial':
+                            self.logger.debug('%s: adding partial %s' % (table, order))
+                            self.add(order)
+                        elif action == 'insert':
+                            self.logger.debug('%s: inserting %s' % (table, order))
+                            self.add(order)
+                        elif action == 'update':
+                            self.logger.debug('%s: updating %s' % (table, order))
+                            self.change(order)
+                        elif action == 'delete':
+                            self.logger.debug('%s: deleting %s' % (table, order))
+                            self.remove(order)
+                        else:
+                            raise Exception("Unknown action: %s" % action)
+                except:
+                    self.logger.error('Error handling RBTrees')
+
+            # # Uncomment this to watch RBTrees evolution in real time 
+            # self.logger.info('==============================================================')
+            # self.logger.info('=============================ASKS=============================')
+            # self.logger.info('==============================================================')
+            # self.logger.info(self._asks)
+            # self.logger.info('==============================================================')
+            # self.logger.info('=============================BIDS=============================')
+            # self.logger.info('==============================================================')
+            # self.logger.info(self._bids)
 
         except:
             self.logger.error(traceback.format_exc())
@@ -467,7 +485,6 @@ class BitMEXWebsocket:
     def __on_close(self):
         '''Called on websocket close.'''
         self.logger.info('Websocket Closed')
-
 
 # Utility method for finding an item in the store.
 # When an update comes through on the websocket, we need to figure out which item in the array it is
