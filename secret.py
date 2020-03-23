@@ -1,0 +1,2 @@
+bitmex_key="qwTH8qDakcGNAE6MTf3vng2w"
+bitmex_secret="P8Wgwfch1Yx1wkz9s3tgnaDNFCwJ2zaqNlTtTaC86A3-btVD"
