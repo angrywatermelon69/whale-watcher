@@ -44,7 +44,6 @@ OTHER_DATA = False
 # When True, data will only be handled as RBTrees (bids and asks).
 # When False, orderBookL2 data will also be stored as dict.
 RB_ONLY = True
-
 class BitMEXBook:
 
     def __init__(self, endpoint="https://www.bitmex.com/api/v1", symbol='XBTUSD'):
@@ -138,7 +137,7 @@ class BitMEXBook:
             }
 
             # The instrument has a tickSize. Use it to round values.
-            instrument = self.get_instrument()[0]
+            instrument = self.data['instrument'][0]
             return {k: toNearest(float(v or 0), instrument['tickSize']) for k, v in ticker.items()}
         else:
             return None
