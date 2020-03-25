@@ -22,7 +22,7 @@ def run():
         sleep(2)
 
         # Get all asks orders from orderbook. Working!
-        #logger.info('All asks orders from oderbook: %s', ws.get_aks_oders())
+        logger.info('All asks orders from oderbook: %s', ws.get_aks_oders())
 
         # When fromTree = True, get last ask price from the Tree, need fix to become the last of the orderbook. Need fix!
         #logger.info('The last ask price : %s', ws.get_ask_price())
