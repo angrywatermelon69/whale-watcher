@@ -1,7 +1,10 @@
 from bitmex_book import BitMEXBook
 import logging
 from time import sleep
-import json
+#import json
+# Simplejson allows serialization of Decimal
+import simplejson as json
+import sys
 from decimal import Decimal
 
 
@@ -19,25 +22,33 @@ def run():
     # Run forever
     while(ws.ws.sock.connected):
        
-        sleep(2)
+        # sleep(2)
 
         # Get all asks orders from orderbook. Working!
-        logger.info('All asks orders from oderbook: %s', ws.get_aks_oders())
+        rbAskOrders = ws.get_aks_orders()
+        logger.info('All asks orders from orderbook: %s', rbAskOrders)
+        with open('rbAskOrders.json', 'w') as f:
+            json.dump(rbAskOrders, f)
 
         # When fromTree = True, get last ask price from the Tree, need fix to become the last of the orderbook. Need fix!
-        #logger.info('The last ask price : %s', ws.get_ask_price())
+        rbLastAskPrice = ws.get_ask_price()
+        logger.info('The last ask price : %s', rbLastAskPrice)
+        with open('rbLastAskPrice.json', 'w') as f:
+            json.dump(rbLastAskPrice, f)
+
+        sys.exit()
 
         # Get the largest ask order size from the orderbook. Working!
-        #logger.info('The largest ask order size from the orderbook : %s', ws.get_ask_largestsize())
+        logger.info('The largest ask order size from the orderbook : %s', ws.get_ask_largest_size())
         
         # Get all asks order sizes from orderbook. Working!
-        #logger.info('All asks order sizes from orderbook : %s', ws.get_aks_sizes())
+        logger.info('All asks order sizes from orderbook : %s', ws.get_aks_sizes())
         
         # Get all asks prices from orderbook. Working!
-        #logger.info('All asks prices from orderbook : %s', ws.get_ask_prices())
+        logger.info('All asks prices from orderbook : %s', ws.get_ask_prices())
         
         # Get all bids orders from orderbook. Working!
-        #logger.info('All bids orders from oderbook: %s', ws.get_bid_oders())
+        #logger.info('All bids orders from oderbook: %s', ws.get_bid_orders())
 
         # When pull bid data without sleep(), an error occurs saying that the Tree is empty.
         # When fromTree = True, get max bid price from the Tree, need fix to become the max of the orderbook.  Need fix!

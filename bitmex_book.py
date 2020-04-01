@@ -39,11 +39,12 @@ MAX_TABLE_LEN = 200
 
 # Get other data besides orderBookL2 (instrument, quote and trade). 
 # Set to 'False' to reduce bandwidth and optimize performance. 
-OTHER_DATA = False
+OTHER_DATA = True
 
 # When True, data will only be handled as RBTrees (bids and asks).
 # When False, orderBookL2 data will also be stored as dict.
-RB_ONLY = True
+RB_ONLY = False
+
 class BitMEXBook:
 
     def __init__(self, endpoint="https://www.bitmex.com/api/v1", symbol='XBTUSD'):
@@ -178,8 +179,8 @@ class BitMEXBook:
 
     ### Ask (sell) functions
 
-    def get_aks_oders(self,fromTree = True):
-        if OTHER_DATA or not fromTree:
+    def get_aks_orders(self,fromTree = True):
+        if OTHER_DATA and not fromTree:
             orderbook = self.data['orderBookL2']
             order_asks = [order for order in orderbook if order['side']  == 'Sell']
             return (order_asks)
@@ -187,15 +188,15 @@ class BitMEXBook:
             return [value[0] for value in self._asks.values()]
 
     def get_ask_price(self, fromTree = True):
-        if OTHER_DATA or not fromTree:
+        if OTHER_DATA and not fromTree:
             orderbook = self.data['orderBookL2']
             order_prices = [order['price'] for order in orderbook if order['side']  == 'Sell']
             return sorted((order_prices))[0]
         else:
             return self._asks.min_item()[1][-1]['price']
 
-    def get_ask_largestsize(self, fromTree = True):
-        if OTHER_DATA or not fromTree:    
+    def get_ask_largest_size(self, fromTree = True):
+        if OTHER_DATA and not fromTree:    
             orderbook = self.data["orderBookL2"]
             order_sizes = [order['size'] for order in orderbook if order['side']  == 'Sell']
             return sorted((order_sizes))[-1]
@@ -203,7 +204,7 @@ class BitMEXBook:
             return sorted([value[0]['size'] for value in self._asks.values()])[-1]
 
     def get_aks_sizes(self, fromTree = True):
-        if OTHER_DATA or not fromTree:    
+        if OTHER_DATA and not fromTree:    
             orderbook = self.data["orderBookL2"]
             order_sizes = [order['size'] for order in orderbook if order['side']  == 'Sell']
             return sorted((order_sizes))
@@ -211,7 +212,7 @@ class BitMEXBook:
             return sorted([value[0]['size'] for value in self._asks.values()])
 
     def get_ask_prices(self, fromTree = True):
-        if OTHER_DATA or not fromTree:
+        if OTHER_DATA and not fromTree:
             orderbook = self.data["orderBookL2"]
             ask_prices = [order['price'] for order in orderbook if order['side']  == 'Sell']
             return ask_prices
@@ -220,8 +221,8 @@ class BitMEXBook:
 
     ### Bid (buy) functions
 
-    def get_bid_oders(self,fromTree = True):
-        if OTHER_DATA or not fromTree:
+    def get_bid_orders(self,fromTree = True):
+        if OTHER_DATA and not fromTree:
             orderbook = self.data['orderBookL2']
             order_bids = [order for order in orderbook if order['side']  == 'Buy']
             return (order_bids)
@@ -229,15 +230,15 @@ class BitMEXBook:
             return [value[0] for value in self._bids.values()]
 
     def get_bid_price(self, fromTree = True):
-        if OTHER_DATA or not fromTree:
+        if OTHER_DATA and not fromTree:
             orderbook = self.data['orderBookL2']
             order_prices = [order['price'] for order in orderbook if order['side']  == 'Buy']
             return sorted((order_prices))[-1]
         else:
             return self._bids.max_key()
 
-    def get_bid_largestsize(self, fromTree = True):
-        if OTHER_DATA or not fromTree:    
+    def get_bid_largest_size(self, fromTree = True):
+        if OTHER_DATA and not fromTree:    
             orderbook = self.data["orderBookL2"]
             order_sizes = [order['size'] for order in orderbook if order['side']  == 'Buy']
             return sorted((order_sizes))[-1]
@@ -245,7 +246,7 @@ class BitMEXBook:
             return sorted([value[0]['size'] for value in self._bids.values()])[-1]
     
     def get_bid_sizes(self, fromTree = True):
-        if OTHER_DATA or not fromTree:    
+        if OTHER_DATA and not fromTree:    
             orderbook = self.data["orderBookL2"]
             order_sizes = [order['size'] for order in orderbook if order['side']  == 'Buy']
             return sorted((order_sizes))
@@ -253,7 +254,7 @@ class BitMEXBook:
             return sorted([value[0]['size'] for value in self._bids.values()])
 
     def get_bid_prices(self, fromTree = True):
-        if OTHER_DATA or not fromTree:
+        if OTHER_DATA and not fromTree:
             orderbook = self.data["orderBookL2"]
             bid_prices = [order['price'] for order in orderbook if order['side']  == 'Buy']
             return bid_prices
