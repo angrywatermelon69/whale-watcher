@@ -45,6 +45,10 @@ OTHER_DATA = True
 # When False, orderBookL2 data will also be stored as dict.
 RB_ONLY = False
 
+# Satoshi to XBT converter
+def XBt_to_XBT(XBt):
+    return float(XBt) / 100000000
+
 class BitMEXBook:
 
     def __init__(self, endpoint="https://www.bitmex.com/api/v1", symbol='XBTUSD'):
@@ -117,6 +121,7 @@ class BitMEXBook:
     # -----------------------------------------------------------------------------------------
     # -----------------------------------------------------------------------------------------
 
+
     def get_instrument(self):
         '''Get the raw instrument data for this symbol.'''
         if OTHER_DATA:
@@ -169,7 +174,7 @@ class BitMEXBook:
             last_price = instrument[0]['lastPrice']
             return last_price
         else:
-            return None
+            None
 
     def get_volume24h(self):
         if OTHER_DATA:
@@ -185,42 +190,9 @@ class BitMEXBook:
         else:
             return None
 
-
-    def get_all_prices(self, fromTree = False):
-        if OTHER_DATA and not fromTree:
-            orderbook = self.data['orderBookL2']
-            order_prices = [order['price'] for order in orderbook]
-            return sorted((order_prices))
-        else:
-            None
-
-    def get_all_sizes(self, fromTree = False):
-        if OTHER_DATA and not fromTree:
-            orderbook = self.data['orderBookL2']
-            order_sizes = [order['size'] for order in orderbook]
-            return sorted((order_sizes))
-        else:
-            None
-
-    def get_largest_size(self, fromTree = False):
-        if OTHER_DATA and not fromTree:
-            orderbook = self.data['orderBookL2']
-            order_sizes = [order['size'] for order in orderbook]
-            return sorted((order_sizes))[-1]
-        else:
-            None
-
-    def get_smallest_size(self, fromTree = False):
-        if OTHER_DATA and not fromTree:
-            orderbook = self.data['orderBookL2']
-            order_sizes = [order['size'] for order in orderbook]
-            return sorted((order_sizes))[0]
-        else:
-            None
-
     ### Ask (sell) functions
 
-    def get_aks_orders(self,fromTree = False):
+    def get_aks_orders(self,fromTree = True):
         if OTHER_DATA and not fromTree:
             orderbook = self.data['orderBookL2']
             order_asks = [order for order in orderbook if order['side']  == 'Sell']
@@ -228,7 +200,7 @@ class BitMEXBook:
         else:
             return [value[0] for value in self._asks.values()]
 
-    def get_ask_price(self, fromTree = False):
+    def get_ask_price(self, fromTree = True):
         if OTHER_DATA and not fromTree:
             orderbook = self.data['orderBookL2']
             order_prices = [order['price'] for order in orderbook if order['side']  == 'Sell']
@@ -236,7 +208,7 @@ class BitMEXBook:
         else:
             return self._asks.min_item()[1][-1]['price']
 
-    def get_ask_largest_size(self, fromTree = False):
+    def get_ask_largest_size(self, fromTree = True):
         if OTHER_DATA and not fromTree:    
             orderbook = self.data["orderBookL2"]
             order_sizes = [order['size'] for order in orderbook if order['side']  == 'Sell']
@@ -244,7 +216,7 @@ class BitMEXBook:
         else:
             return sorted([value[0]['size'] for value in self._asks.values()])[-1]
 
-    def get_ask_sizes(self, fromTree = False):
+    def get_ask_sizes(self, fromTree = True):
         if OTHER_DATA and not fromTree:    
             orderbook = self.data["orderBookL2"]
             order_sizes = [order['size'] for order in orderbook if order['side']  == 'Sell']
@@ -252,7 +224,7 @@ class BitMEXBook:
         else:
             return sorted([value[0]['size'] for value in self._asks.values()])
 
-    def get_ask_prices(self, fromTree = False):
+    def get_ask_prices(self, fromTree = True):
         if OTHER_DATA and not fromTree:
             orderbook = self.data["orderBookL2"]
             ask_prices = [order['price'] for order in orderbook if order['side']  == 'Sell']
@@ -262,7 +234,7 @@ class BitMEXBook:
 
     ### Bid (buy) functions
 
-    def get_bid_orders(self,fromTree = False):
+    def get_bid_orders(self,fromTree = True):
         if OTHER_DATA and not fromTree:
             orderbook = self.data['orderBookL2']
             order_bids = [order for order in orderbook if order['side']  == 'Buy']
@@ -270,7 +242,7 @@ class BitMEXBook:
         else:
             return [value[0] for value in self._bids.values()]
 
-    def get_bid_price(self, fromTree = False):
+    def get_bid_price(self, fromTree = True):
         if OTHER_DATA and not fromTree:
             orderbook = self.data['orderBookL2']
             order_prices = [order['price'] for order in orderbook if order['side']  == 'Buy']
@@ -278,7 +250,7 @@ class BitMEXBook:
         else:
             return self._bids.max_key()
 
-    def get_bid_largest_size(self, fromTree = False):
+    def get_bid_largest_size(self, fromTree = True):
         if OTHER_DATA and not fromTree:    
             orderbook = self.data["orderBookL2"]
             order_sizes = [order['size'] for order in orderbook if order['side']  == 'Buy']
@@ -286,7 +258,7 @@ class BitMEXBook:
         else:
             return sorted([value[0]['size'] for value in self._bids.values()])[-1]
     
-    def get_bid_sizes(self, fromTree = False):
+    def get_bid_sizes(self, fromTree = True):
         if OTHER_DATA and not fromTree:    
             orderbook = self.data["orderBookL2"]
             order_sizes = [order['size'] for order in orderbook if order['side']  == 'Buy']
@@ -294,7 +266,7 @@ class BitMEXBook:
         else:
             return sorted([value[0]['size'] for value in self._bids.values()])
 
-    def get_bid_prices(self, fromTree = False):
+    def get_bid_prices(self, fromTree = True):
         if OTHER_DATA and not fromTree:
             orderbook = self.data["orderBookL2"]
             bid_prices = [order['price'] for order in orderbook if order['side']  == 'Buy']
@@ -317,7 +289,7 @@ class BitMEXBook:
             except KeyError:
                 continue
             for order in this_ask:
-                result['asks'].append([order['price'], order['size'], order['id']])
+                result['asks'].append([order['price'],(order['size']/Decimal(order['price'])), order['id']]) #(order['size']/Decimal(order['price']))
         # Same procedure for bids
         for bid in self._bids:
             try:
@@ -326,7 +298,7 @@ class BitMEXBook:
                 continue
 
             for order in this_bid:
-                result['bids'].append([order['price'], order['size'], order['id']])
+                result['bids'].append([order['price'], (order['size']/Decimal(order['price'])) , order['id']])  #(order['size']/Decimal(order['price']))
         return result
 
     # -----------------------------------------------------------------------------------------
@@ -607,6 +579,9 @@ class BitMEXBook:
     def __on_close(self):
         '''Called on websocket close.'''
         self.logger.info('Websocket Closed')
+
+
+
 
 # Utility method for finding an item in the store.
 # When an update comes through on the websocket, we need to figure out which item in the array it is
