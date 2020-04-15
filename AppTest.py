@@ -14,6 +14,7 @@ import numpy as np
 import threading
 from queue import Queue
 from time import sleep
+import csv
 
 ws = BitMEXBook()
 app = dash.Dash()
@@ -36,11 +37,10 @@ symbol = '$'
 base_currency = 'USD'
 currency = 'BTC'
 SIGNIFICANT = {"USD": 2, "BTC": 5}
-SYMBOLS = {"USD": "$", "BTC": "₿"}
 
 sig_use = SIGNIFICANT.get(base_currency.upper(), 2)
 noDouble = True
-clientRefresh = 2
+clientRefresh = 3
 
 def fixNan(x, pMin=True):
     if isnan(x):
@@ -71,9 +71,7 @@ def round_sig(x, sig=3, overwrite=0, minimum=0):
         else:
             return round(x, digits)
 
-
 def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
-    global tables, timeStamps, shape_bid, shape_ask, E_GDAX, marketPrice, timeStampsGet
     
     order_book = ws.get_current_book()
     ask_tbl = pd.DataFrame(data=order_book['asks'], columns=[
@@ -150,7 +148,7 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
         last_bid = current_bid_border
 
     # Get Market Price
-    mp = round_sig(ws.get_last_price(),3, 0, sig_use)
+    mp = round_sig(ws.get_trade_price(),3, 0, sig_use)
 
 
     bid_tbl = bid_tbl.iloc[::-1]  # flip the bid table so that the merged full_tbl is in logical order
@@ -272,28 +270,16 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
 
     depth_ask[combined] = ob_ask
     depth_bid[combined] = ob_bid
-    return 
-
-app.layout = html.Div(id='main_container', children=[
     
-    html.Div([
-        html.H2('CRYPTO WHALE WATCHING APP')
-        ]
-    ),
-    html.Div(id='graphs_Container', 
-        children =[ 
-            dcc.Graph(id='live-graph-' + exchange + "-" + ticker)
-            ]
-        ),
-    html.Div(
-        dcc.Interval(
-            id='main-interval-component',
-            interval=clientRefresh * 1000,
-            n_intervals=0
-                )
-            )
-        ]
-    )
+    # print whales in a csv file
+    txtWhale = (
+                "There is a " + final_tbl[TBL_VOLUME].map(str) + " " + currency + " order for " + symbol + final_tbl[
+            TBL_PRICE].map(str) + ' at ' + timeStamps[combined]+ ' ' + '\n')
+    with open('whaleCSV.csv', 'a', newline='') as f:
+        wcsv = csv.writer(f)
+        wcsv.writerow(txtWhale)
+
+    return
 
 def prepare_data():
     data = tables[combined]
@@ -455,6 +441,26 @@ def prepare_data():
         }
     return result
 
+app.layout = html.Div(id='main_container', children=[
+    
+    html.Div([
+        html.H2('CRYPTO WHALE WATCHING APP')
+        ]
+    ),
+    html.Div(id='graphs_Container', 
+        children =[ 
+            dcc.Graph(id='live-graph-' + exchange + "-" + ticker)
+            ]
+        ),
+    html.Div(
+        dcc.Interval(
+            id='main-interval-component',
+            interval=clientRefresh * 1000,
+            n_intervals=0
+                )
+            )
+        ]
+    )
 
 @app.callback(Output('graphs_Container', 'children'),
               [Input('main-interval-component', 'n_intervals')])
@@ -469,5 +475,7 @@ def update_Site_data(n):
 def run():
     app.run_server()
     
+    
 if __name__ == '__main__':
     run()
+   

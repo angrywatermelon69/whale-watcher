@@ -182,7 +182,7 @@ def run():
         # #logger.info('Bitmex prevprice 24h: %s', ws.get_prevprice24h())
 
         # # return
-        logger.info()
+        logger.info(ws.data['instrument'])
         return 
 
 def setup_logger():

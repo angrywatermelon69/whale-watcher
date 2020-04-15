@@ -176,6 +176,14 @@ class BitMEXBook:
         else:
             None
 
+    def get_mark_price(self):
+        if OTHER_DATA:
+            instrument = self.data['instrument']
+            last_price = instrument[0]['markPrice']
+            return last_price
+        else:
+            None
+
     def get_volume24h(self):
         if OTHER_DATA:
             volume24h = self.data['instrument'][0]['volume24h']
