@@ -6,15 +6,11 @@ import pandas as pd
 from bitmex_book import BitMEXBook
 from math import log10, floor, isnan
 from dash.dependencies import Output, Input
-from datetime import datetime
-import colorama
-import sys
-import getopt
+from datetime import datetime, timedelta
 import numpy as np
-import threading
-from queue import Queue
-from time import sleep
 import csv
+import logging
+from logging.handlers import RotatingFileHandler
 
 ws = BitMEXBook()
 app = dash.Dash()
@@ -37,10 +33,31 @@ symbol = '$'
 base_currency = 'USD'
 currency = 'BTC'
 SIGNIFICANT = {"USD": 2, "BTC": 5}
+DATA_DIR = 'data/'
 
 sig_use = SIGNIFICANT.get(base_currency.upper(), 2)
 noDouble = True
-clientRefresh = 3
+clientRefresh = 15
+
+def setup_db(name, extension='.csv', getPath = False):
+    """Setup writer that formats data to csv, supports multiple instances with no overlap."""
+    formatter = logging.Formatter(fmt='%(asctime)s,%(message)s', datefmt='%d-%m-%y,%H:%M:%S')
+    date = datetime.today().strftime('%Y-%m-%d')
+    db_path = str(DATA_DIR + name + '/' + name + '_' + date + extension)
+
+    handler = RotatingFileHandler(db_path, backupCount=1)
+    handler.setFormatter(formatter)
+
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    logger.handlers.clear()
+    logger.addHandler(handler)
+    
+
+    if getPath:
+        return logger, db_path
+    else:
+        return logger
 
 def fixNan(x, pMin=True):
     if isnan(x):
@@ -272,13 +289,16 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
     depth_bid[combined] = ob_bid
     
     # print whales in a csv file
-    txtWhale = (
-                "There is a " + final_tbl[TBL_VOLUME].map(str) + " " + currency + " order for " + symbol + final_tbl[
-            TBL_PRICE].map(str) + ' at ' + timeStamps[combined]+ ' ' + '\n')
-    with open('whaleCSV.csv', 'a', newline='') as f:
-        wcsv = csv.writer(f)
-        wcsv.writerow(txtWhale)
+    csv_logger = setup_db('orders')
+    
+    with open(DATA_DIR + 'orders' + '/' + 'orders' + '_' + datetime.today().strftime('%Y-%m-%d') + '.csv' , 'r') as f:
+        readcsv = csv.reader(f, delimiter=',') 
 
+        for price,size in zip([str(price) for price in final_tbl[TBL_PRICE]], [str(size) for size in final_tbl[TBL_VOLUME]]):
+            if any(price and size in str(row) for row in readcsv):
+                pass
+            else:
+                csv_logger.info("%s,%s" %(price,size))
     return
 
 def prepare_data():
@@ -474,7 +494,6 @@ def update_Site_data(n):
 
 def run():
     app.run_server()
-    
     
 if __name__ == '__main__':
     run()

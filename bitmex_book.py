@@ -35,7 +35,7 @@ from tqdm import tqdm
 CONN_TIMEOUT = 5
 
 # It's recommended not to grow a table larger than 200. Helps cap memory usage.
-MAX_TABLE_LEN = 200
+MAX_TABLE_LEN = 400
 
 # Get other data besides orderBookL2 (instrument, quote and trade). 
 # Set to 'False' to reduce bandwidth and optimize performance. 
