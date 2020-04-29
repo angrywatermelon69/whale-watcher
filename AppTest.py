@@ -3,20 +3,24 @@ import dash_core_components as dcc
 import dash_html_components as html
 import plotly.graph_objs as go
 import pandas as pd
-from bitmex_book import BitMEXBook
 from math import log10, floor, isnan
 from dash.dependencies import Output, Input
 from datetime import datetime, timedelta
+from time import sleep
 import numpy as np
 import csv
 import logging
 from logging.handlers import RotatingFileHandler
+import threading
+from decimal import Decimal
+
+# custom library
+from bitmex_book import BitMEXBook
 
 ws = BitMEXBook()
 app = dash.Dash()
 
-TBL_PRICE = 'price'
-TBL_VOLUME = 'volume'
+# creating variables to facilitate later parameterization
 tables = {}
 depth_ask = {}
 depth_bid = {}
@@ -26,6 +30,8 @@ shape_ask = {}
 timeStampsGet = {}  
 timeStamps = {}  
 
+TBL_PRICE = 'price'
+TBL_VOLUME = 'volume'
 ticker = 'XBTUSD'
 exchange = 'BitMEX'
 combined = exchange + ticker
@@ -34,10 +40,9 @@ base_currency = 'USD'
 currency = 'BTC'
 SIGNIFICANT = {"USD": 2, "BTC": 5}
 DATA_DIR = 'data/'
-
 sig_use = SIGNIFICANT.get(base_currency.upper(), 2)
 noDouble = True
-clientRefresh = 15
+clientRefresh = 5
 
 def setup_db(name, extension='.csv', getPath = False):
     """Setup writer that formats data to csv, supports multiple instances with no overlap."""
@@ -53,7 +58,6 @@ def setup_db(name, extension='.csv', getPath = False):
     logger.handlers.clear()
     logger.addHandler(handler)
     
-
     if getPath:
         return logger, db_path
     else:
@@ -89,7 +93,8 @@ def round_sig(x, sig=3, overwrite=0, minimum=0):
             return round(x, digits)
 
 def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
-    
+    global tables, timeStamps, shape_bid, shape_ask, marketPrice, timeStampsGet
+
     order_book = ws.get_current_book()
     ask_tbl = pd.DataFrame(data=order_book['asks'], columns=[
                 TBL_PRICE, TBL_VOLUME, 'address'])
@@ -166,12 +171,10 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
 
     # Get Market Price
     mp = round_sig(ws.get_trade_price(),3, 0, sig_use)
-
-
+    
     bid_tbl = bid_tbl.iloc[::-1]  # flip the bid table so that the merged full_tbl is in logical order
 
     fulltbl = bid_tbl.append(ask_tbl)  # append the buy and sell side tables to create one cohesive table
-
     minVolume = fulltbl[TBL_VOLUME].sum() * minVolumePerc  # Calc minimum Volume for filtering
     fulltbl = fulltbl[
         (fulltbl[TBL_VOLUME] >= minVolume)]  # limit our view to only orders greater than or equal to the minVolume size
@@ -288,20 +291,6 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
     depth_ask[combined] = ob_ask
     depth_bid[combined] = ob_bid
     
-    # print whales in a csv file
-    csv_logger = setup_db('orders')
-    
-    with open(DATA_DIR + 'orders' + '/' + 'orders' + '_' + datetime.today().strftime('%Y-%m-%d') + '.csv' , 'r') as f:
-        readcsv = csv.reader(f, delimiter=',') 
-
-        for price,size in zip([str(price) for price in final_tbl[TBL_PRICE]], [str(size) for size in final_tbl[TBL_VOLUME]]):
-            if any(price and size in str(row) for row in readcsv):
-                pass
-            else:
-                csv_logger.info("%s,%s" %(price,size))
-    return
-
-def prepare_data():
     data = tables[combined]
     ob_ask = depth_ask[combined]
     ob_bid = depth_bid[combined]
@@ -369,15 +358,15 @@ def prepare_data():
                                 x0=vol, y0=row['min_Price'],
                                 x1=vol, y1=row['max_Price'],
                                 line=dict(color='rgb(0, 255, 0)', width=cWidth)))
-        bid_trace['x'].append(vol)
-        bid_trace['y'].append(row['min_Price'])
-        bid_trace['text'].append(row['text'])
-        bid_trace['text'].append(row['text'])
-        bid_trace['x'].append(vol)
-        bid_trace['y'].append(posY)
-        bid_trace['x'].append(vol)
-        bid_trace['y'].append(row['max_Price'])
-        bid_trace['text'].append(row['text'])
+        list(bid_trace['x']).append(vol)
+        list(bid_trace['y']).append(row['min_Price'])
+        list(bid_trace['text']).append(row['text'])
+        list(bid_trace['text']).append(row['text'])
+        list(bid_trace['x']).append(vol)
+        list(bid_trace['y']).append(posY)
+        list(bid_trace['x']).append(vol)
+        list(bid_trace['y']).append(row['max_Price'])
+        list(bid_trace['text']).append(row['text'])
     for index, row in shape_ask[combined].iterrows():
         cWidth = row['unique'] * width_factor
         vol = row[TBL_VOLUME]
@@ -391,15 +380,15 @@ def prepare_data():
                                 x0=vol, y0=row['min_Price'],
                                 x1=vol, y1=row['max_Price'],
                                 line=dict(color='rgb(255, 0, 0)', width=cWidth)))
-        ask_trace['x'].append(vol)
-        ask_trace['y'].append(row['min_Price'])
-        ask_trace['text'].append(row['text'])
-        ask_trace['x'].append(vol)
-        ask_trace['y'].append(posY)
-        ask_trace['text'].append(row['text'])
-        ask_trace['x'].append(vol)
-        ask_trace['y'].append(row['max_Price'])
-        ask_trace['text'].append(row['text'])
+        list(ask_trace['x']).append(vol)
+        list(ask_trace['y']).append(row['min_Price'])
+        list(ask_trace['text']).append(row['text'])
+        list(ask_trace['x']).append(vol)
+        list(ask_trace['y']).append(posY)
+        list(ask_trace['text']).append(row['text'])
+        list(ask_trace['x']).append(vol)
+        list(ask_trace['y']).append(row['max_Price'])
+        list(ask_trace['text']).append(row['text'])
 
     result ={ 
         'data': [
@@ -459,6 +448,19 @@ def prepare_data():
             showlegend=False
             )
         }
+
+    # print whales in a csv file
+    csv_logger = setup_db('orders')
+   
+    with open(DATA_DIR + 'orders/orders' + '_' + datetime.today().strftime('%Y-%m-%d') + '.csv' , 'r') as f:
+        readcsv = csv.reader(f, delimiter=',') 
+        
+        for price,size in zip([str(price) for price in final_tbl[TBL_PRICE]], [str(size) for size in final_tbl[TBL_VOLUME]]):
+        
+            if any(price and size in str(row) for row in readcsv):
+                pass
+            else:
+                csv_logger.info("%s,%s" %(price,size))           
     return result
 
 app.layout = html.Div(id='main_container', children=[
@@ -485,16 +487,23 @@ app.layout = html.Div(id='main_container', children=[
 @app.callback(Output('graphs_Container', 'children'),
               [Input('main-interval-component', 'n_intervals')])
 def update_Site_data(n):
-    calc_data()
-    cData = prepare_data()
+    cData = calc_data()
     children = [dcc.Graph(
         id='live-graph-' + exchange + "-" + ticker,
-        figure=cData)]
+        figure=cData)]  
     return children
 
-def run():
-    app.run_server()
+# def run():
+#     app.run_server()
     
-if __name__ == '__main__':
-    run()
+#     # app_run = threading.Thread(target =run_app)
+#     # app_run.daemon = True
+#     # app_run.start()
+
+#     # while ws.ws.sock.connected:
+#     #     threading.Timer(60, ws.reset).start()
+#     #     sleep(30)
+
    
+if __name__ == '__main__':
+    app.run_server()

@@ -35,15 +35,15 @@ from tqdm import tqdm
 CONN_TIMEOUT = 5
 
 # It's recommended not to grow a table larger than 200. Helps cap memory usage.
-MAX_TABLE_LEN = 400
+MAX_TABLE_LEN = 200
 
 # Get other data besides orderBookL2 (instrument, quote and trade). 
 # Set to 'False' to reduce bandwidth and optimize performance. 
-OTHER_DATA = True
+OTHER_DATA = False
 
 # When True, data will only be handled as RBTrees (bids and asks).
 # When False, orderBookL2 data will also be stored as dict.
-RB_ONLY = False
+RB_ONLY = True
 
 # Satoshi to XBT converter
 def XBt_to_XBT(XBt):
@@ -158,7 +158,9 @@ class BitMEXBook:
             price_trade = [order['price'] for order in last_trade]
             return price_trade[-1]
         else:
-            return None
+            min_ask = min(value[0]['price'] for value in self._asks.values())
+            max_bid = max(value[0]['price'] for value in self._bids.values())
+            return (min_ask+max_bid)/2
 
     def get_volume(self):
         if OTHER_DATA:
@@ -306,7 +308,7 @@ class BitMEXBook:
                 continue
 
             for order in this_bid:
-                result['bids'].append([order['price'], (order['size']/Decimal(order['price'])) , order['id']])  #(order['size']/Decimal(order['price']))
+                result['bids'].append([order['price'], (order['size']/Decimal(order['price'])), order['id']])  #(order['size']/Decimal(order['price']))
         return result
 
     # -----------------------------------------------------------------------------------------
@@ -319,32 +321,32 @@ class BitMEXBook:
         return self._asks.min_key()
 
     # Get ask given price
-    def get_asks(self, price):
-        return self._asks.get(price)
+    def get_asks(self, id):
+        return self._asks.get(id)
 
     # Remove ask form tree
-    def remove_asks(self, price):
-        self._asks.remove(price)
+    def remove_asks(self, id):
+        self._asks.remove(id)
 
     # Insert ask into tree
-    def set_asks(self, price, asks):
-        self._asks.insert(price, asks)
+    def set_asks(self, id, asks):
+        self._asks.insert(id, asks)
 
     # Get current maximum bid price from tree
     def get_bid(self):
         return self._bids.max_key()
 
     # Get bid given price
-    def get_bids(self, price):
-        return self._bids.get(price)
+    def get_bids(self, id):
+        return self._bids.get(id)
 
     # Remove bid form tree
-    def remove_bids(self, price):
-        self._bids.remove(price)
+    def remove_bids(self, id):
+        self._bids.remove(id)
 
     # Insert bid into tree
-    def set_bids(self, price, bids):
-        self._bids.insert(price, bids)
+    def set_bids(self, id, bids):
+        self._bids.insert(id, bids)
 
     # Add order to out watched orders
     def add(self, order):
@@ -355,19 +357,19 @@ class BitMEXBook:
             'price': order['price'] # Order price data
         }
         if order['side'] == 'Buy':
-            bids = self.get_bids(order['price'])
+            bids = self.get_bids(order['id'])
             if bids is None:
                 bids = [order]
             else:
                 bids.append(order)
-            self.set_bids(order['price'], bids)
+            self.set_bids(order['id'], bids)
         else:
-            asks = self.get_asks(order['price'])
+            asks = self.get_asks(order['id'])
             if asks is None:
                 asks = [order]
             else:
                 asks.append(order)
-            self.set_asks(order['price'], asks)
+            self.set_asks(order['id'], asks)
 
     # Order is done, remove it from watched orders
     def remove(self, order):
@@ -399,14 +401,14 @@ class BitMEXBook:
             bids = self.get_bids(oid)
             if bids is None or not any(o['id'] == order['id'] for o in bids):
                 return
-            index = map(itemgetter('id'), bids).index(order['id'])
+            index = list(map(itemgetter('id'), bids)).index(order['id'])
             bids[index]['size'] = new_size
             self.set_bids(oid, bids)
         else:
             asks = self.get_asks(oid)
             if asks is None or not any(o['id'] == order['id'] for o in asks):
                 return
-            index = map(itemgetter('id'), asks).index(order['id'])
+            index = list(map(itemgetter('id'), asks)).index(order['id'])
             asks[index]['size'] = new_size
             self.set_asks(oid, asks)
 

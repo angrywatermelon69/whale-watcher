@@ -182,14 +182,21 @@ def run():
         # #logger.info('Bitmex prevprice 24h: %s', ws.get_prevprice24h())
 
         # # return
-        logger.info(ws.data['instrument'])
+        # 8687.5: [{'id': 8799131250, 'side': 'Buy', 'size': Decimal('17792'), 'price': 8687.5}]
+        
+        # logger.info(8799130700 in ws._bids)
+        logger.info(ws._asks)
+        
+        # with open(DATA_DIR + 'currentbook2.txt', 'a') as f:
+        #     f.write(ws._asks)
+        # sleep(3)
         return 
 
 def setup_logger():
     # Prints logger info to terminal
     logger = logging.getLogger()
     
-    #logger.setLevel(logging.DEBUG)  # Change this to DEBUG if you want a lot more info
+    # logger.setLevel(logging.DEBUG)  # Change this to DEBUG if you want a lot more info
     logger.setLevel(logging.INFO)
     ch = logging.StreamHandler()
     # create formatter
