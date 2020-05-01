@@ -5,9 +5,9 @@ from time import sleep
 # Simplejson allows serialization of Decimal
 import simplejson as json
 import sys
-
+import datetime as dt
 DATA_DIR = 'data/'
-
+today = dt.datetime.today().strftime('%Y-%m-%d')
 
 # Basic use of websocket.
 def run():
@@ -185,10 +185,17 @@ def run():
         # 8687.5: [{'id': 8799131250, 'side': 'Buy', 'size': Decimal('17792'), 'price': 8687.5}]
         
         # logger.info(8799130700 in ws._bids)
-        logger.info(ws._asks)
+        # logger.info(ws._asks)
         
-        # with open(DATA_DIR + 'currentbook2.txt', 'a') as f:
-        #     f.write(ws._asks)
+        
+        # try:
+        with open(DATA_DIR + 'orders/orders' + '_' + today + '.json') as f:
+            orders = json.load(f)
+            # except:
+            #     orders = {}
+            
+        logger.info(orders)
+        
         # sleep(3)
         return 
 

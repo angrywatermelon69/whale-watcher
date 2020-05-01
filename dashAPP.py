@@ -1,26 +1,27 @@
+# Import required libraries
+import datetime as dt
+import json
+import csv
+import schedule
 import dash
+from dash.dependencies import Output, Input
 import dash_core_components as dcc
 import dash_html_components as html
 import plotly.graph_objs as go
 import pandas as pd
 from math import log10, floor, isnan
-from dash.dependencies import Output, Input
-from datetime import datetime, timedelta
-from time import sleep
 import numpy as np
-import csv
 import logging
 from logging.handlers import RotatingFileHandler
-import threading
 from decimal import Decimal
-
-# custom library
 from bitmex_book import BitMEXBook
 
-ws = BitMEXBook()
-app = dash.Dash()
+# Creating webapp
+app = dash.Dash(__name__)
+server = app.server
 
 # creating variables to facilitate later parameterization
+ws = BitMEXBook()
 tables = {}
 depth_ask = {}
 depth_bid = {}
@@ -47,7 +48,7 @@ clientRefresh = 5
 def setup_db(name, extension='.csv', getPath = False):
     """Setup writer that formats data to csv, supports multiple instances with no overlap."""
     formatter = logging.Formatter(fmt='%(asctime)s,%(message)s', datefmt='%d-%m-%y,%H:%M:%S')
-    date = datetime.today().strftime('%Y-%m-%d')
+    date = dt.datetime.today().strftime('%Y-%m-%d')
     db_path = str(DATA_DIR + name + '/' + name + '_' + date + extension)
 
     handler = RotatingFileHandler(db_path, backupCount=1)
@@ -55,13 +56,362 @@ def setup_db(name, extension='.csv', getPath = False):
 
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
-    logger.handlers.clear()
-    logger.addHandler(handler)
+
+    if (logger.hasHandlers()):
+        logger.handlers.clear()
+        logger.addHandler(handler)
+    else:
+        logger.addHandler(handler)
     
     if getPath:
         return logger, db_path
     else:
         return logger
+
+def update_today():
+    today = dt.datetime.today().strftime('%Y-%m-%d')
+    return 
+schedule.every(60).seconds.do(update_today)
+
+layout = dict(
+    autosize=True,
+    automargin=True,
+    margin=dict(
+        l=30,
+        r=30,
+        b=20,
+        t=40
+    ),
+    hovermode="closest",
+    plot_bgcolor="#F9F9F9",
+    paper_bgcolor='#F9F9F9',
+    legend=dict(font=dict(size=10), orientation='h'),
+    title='Dashboard - Running',
+)
+
+# Create app layout
+app.layout = html.Div(
+    [
+        dcc.Store(id='aggregate_data'),
+
+        # Header
+        html.Div(
+            [
+                html.Div(
+                    [
+                        html.H2(
+                            'Pyno - Dashboard V0',
+                            style={'padding-left':'65px',
+                                    'padding-top' : '20px'}
+
+                        ),
+                        html.H5(
+                            'Running Instance Stats',
+                            style={'padding-left':'65px',
+                                    'font-size': '1.5rem'}
+                        ),
+                        html.H5(
+                            id = 'timestamp',
+                            style={'padding-left':'65px',
+                                    'font-size': '1.5rem'}
+                        ),
+                    ],
+
+                    className='eight columns'
+                ),
+                html.A(
+                    html.Button(
+                        "Learn More",
+                        id="learnMore"
+                    ),
+                    href="https://quan.digital",
+                    className="two columns"
+                )
+            ],
+            id="header",
+            className='row',
+        ),
+
+        # Upper page components
+        html.Div(
+            [
+                
+                html.Div(
+                    [   
+                        # First info row
+                        html.Div(
+                            [
+                                html.Div(
+                                    [
+                                        html.P("Symbol"),
+                                        html.H6(
+                                            id="symbol",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+                        html.Div(
+                            [
+                                html.Div(
+                                    [
+                                        html.P("State"),
+                                        html.H6(
+                                            id="state",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+
+                                html.Div(
+                                    [
+                                        html.P("Previous Close Price"),
+                                        html.H6(
+                                            id="prevClosePrice",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+
+                                html.Div(
+                                    [
+                                        html.P("Volume"),
+                                        html.H6(
+                                            id="volume",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+
+                                html.Div(
+                                    [
+                                        html.P("Volume 24h"),
+                                        html.H6(
+                                            id="volume24h",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+
+                                html.Div(
+                                    [
+                                        html.P("Turn Over"),
+                                        html.H6(
+                                            id="turnover",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+
+                                html.Div(
+                                    [
+                                        html.P("Turn Over 24h"),
+                                        html.H6(
+                                            id="turnover24h",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+
+                            ],
+                            id="btcInfo",
+                            className="row"
+                        ),
+
+                        # Second info row
+                        html.Div(
+                            [
+                                html.Div(
+                                    [
+                                        html.P("High Price"),
+                                        html.H6(
+                                            id="highPrice",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+
+                                html.Div(
+                                    [
+                                        html.P("Low Price"),
+                                        html.H6(
+                                            id="lowPrice",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+
+                                html.Div(
+                                    [
+                                        html.P("Last Price"), 
+                                        html.H6(
+                                            id="lastPrice",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+
+                                html.Div(
+                                    [
+                                        html.P("Bid Price"), 
+                                        html.H6(
+                                            id="bidPrice",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+
+                                html.Div(
+                                    [
+                                        html.P("Mid Price"), 
+                                        html.H6(
+                                            id="midPrice",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+
+                                html.Div(
+                                    [
+                                        html.P("Ask Price"),
+                                        html.H6(
+                                            id="askPrice",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+
+                                html.Div(
+                                    [
+                                        html.P("Open Interest"),
+                                        html.H6(
+                                            id="openInterest",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+                                html.Div(
+                                    [
+                                        html.P("Open Value"),
+                                        html.H6(
+                                            id="openValue",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+                                html.Div(
+                                    [
+                                        html.P("Mark Price"),
+                                        html.H6(
+                                            id="markPrice",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+
+                            ],
+                            id="infoContainer",
+                            className="row"
+                        ),
+
+                        # graph overtime plot
+                        html.Div(id='whale_graph', 
+                        children =[ 
+                            dcc.Graph(id='live-graph-' + exchange + "-" + ticker)
+                            ],
+                            className="pretty_container"
+                        )
+                    ]
+                )
+            ] 
+        ),
+        html.Div([
+            html.Div([
+                html.P("Whales spotted today"),
+                html.H6(
+                    className="info_text",
+                    id = "whales_soitted",
+                    style={'whiteSpace': 'pre-wrap'}
+                                )
+                            ],
+                            className="pretty_container"
+                        ),
+                    ],
+                    className="pretty_container five columns"
+                ),
+                # Footer
+                html.Div(
+                    [
+                    html.P(
+                    'Designed by canokaue',
+                    style={
+                            # 'padding-left':'65px',
+                            'font-size': '1.5rem',
+                            'color': '#b5c6cc',
+                            'align': 'left',
+                            }
+                        ),
+
+                    html.P(
+                    'Pyno Dashboard v0.1 - © Quan Digital 2020',
+                    style={
+                        'padding-left':'165px',
+                            'font-size': '1.5rem',
+                            'color': '#b5c6cc',
+                            'align': 'left',
+                            }
+                        ),
+                    ], 
+                    id = 'footer',
+                    className="row"
+                    ),
+
+                    # Update loop component 
+                    dcc.Interval(
+                        id='interval-component',
+                        interval=clientRefresh*1000,  
+                        n_intervals=0
+                    )
+                ],
+                id="mainContainer",
+                style={
+                    "display": "flex",
+                    "flex-direction": "column"
+                },
+            )
+        ]
+    )
 
 def fixNan(x, pMin=True):
     if isnan(x):
@@ -93,7 +443,6 @@ def round_sig(x, sig=3, overwrite=0, minimum=0):
             return round(x, digits)
 
 def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
-    global tables, timeStamps, shape_bid, shape_ask, marketPrice, timeStampsGet
 
     order_book = ws.get_current_book()
     ask_tbl = pd.DataFrame(data=order_book['asks'], columns=[
@@ -101,7 +450,7 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
     bid_tbl = pd.DataFrame(data=order_book['bids'], columns=[
                 TBL_PRICE, TBL_VOLUME, 'address'])
 
-    timeStampsGet[combined] = datetime.now().strftime("%H:%M:%S")
+    timeStampsGet[combined] = dt.datetime.now().strftime("%H:%M:%S")
 
     # prepare Price
     ask_tbl[TBL_PRICE] = pd.to_numeric(ask_tbl[TBL_PRICE])
@@ -170,7 +519,7 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
         last_bid = current_bid_border
 
     # Get Market Price
-    mp = round_sig(ws.get_trade_price(),3, 0, sig_use)
+    mp = round_sig(ws.get_market_price(),3, 0, sig_use)
     
     bid_tbl = bid_tbl.iloc[::-1]  # flip the bid table so that the merged full_tbl is in logical order
 
@@ -326,25 +675,25 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
         type='line',
         x0=x_min * 0.5, y0=market_price,
         x1=x_max * 1.5, y1=market_price,
-        line=dict(color='rgb(0, 0, 0)', width=2, dash='dash')
+        line=dict(color='#F9F9F9', width=2, dash='dash')
     )]
     annot_arr = [dict(
         x=log10((x_max*0.9)), y=market_price, xref='x', yref='y',
         text=str(market_price) + symbol,
         showarrow=True, arrowhead=7, ax=20, ay=0,
-        bgcolor='rgb(0,0,255)', font={'color': '#ffffff'}
+        bgcolor='#F9F9F9', font={'color': 'rgb(0,0,0)', 'size':14}
     )]
     # delete these 10 lines below if we want to move to a JS-based coloring system in the future
     shape_arr.append(dict(type='rect',
                             x0=x_min, y0=market_price,
                             x1=x_max, y1=market_price * 1.05,
                             line=dict(color='rgb(255, 0, 0)', width=0.01),
-                            fillcolor='rgba(255, 0, 0, 0.04)'))
+                            fillcolor='rgba(255, 0, 0, 0.06)'))
     shape_arr.append(dict(type='rect',
                             x0=x_min, y0=market_price,
                             x1=x_max, y1=market_price * 0.95,
                             line=dict(color='rgb(0, 255, 0)', width=0.01),
-                            fillcolor='rgba(0, 255, 0, 0.04)'))
+                            fillcolor='rgba(0, 255, 0, 0.06)'))
     for index, row in shape_bid[combined].iterrows():
         cWidth = row['unique'] * width_factor
         vol = row[TBL_VOLUME]
@@ -429,19 +778,19 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
         'layout': go.Layout(
             # title automatically updates with refreshed market price
             title=("The present market price of {} on {} is: {}{} at {}".format(ticker, exchange, symbol,
-                                                                                str(
-                                                                                    marketPrice[combined]),
+                                                                                str(marketPrice[combined]),
                                                                                 timeStamps[combined])),
-            xaxis=dict(title='Order Size', type='log',range=[log10(x_min*0.95), log10(x_max*1.03)]),
-            yaxis={'title': '{} Price'.format(ticker),'range':[market_price*0.94, market_price*1.06]},
+            xaxis=dict(title='Order Size', type='log',range=[log10(x_min*0.95), log10(x_max*1.03)], color = '#F9F9F9'),
+            yaxis=dict(title = '{} Price'.format(ticker),range = [market_price*0.94, market_price*1.06], color = '#F9F9F9'),
+            font=dict(color = '#F9F9F9', size=14),
             hovermode='closest',
             # now code to ensure the sizing is right
             margin={
                 'l':75, 'r':75,
                 'b':50, 't':50,
                 'pad':4},
-            paper_bgcolor='#F5F5F5',
-            plot_bgcolor='#F5F5F5',
+            paper_bgcolor='#313541',
+            plot_bgcolor='#313541',
             # adding the horizontal reference line at market price
             shapes=shape_arr,
             annotations=annot_arr,
@@ -452,40 +801,28 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
     # print whales in a csv file
     csv_logger = setup_db('orders')
    
-    with open(DATA_DIR + 'orders/orders' + '_' + datetime.today().strftime('%Y-%m-%d') + '.csv' , 'r') as f:
+    with open(DATA_DIR + 'orders/orders' + '_' + dt.datetime.today().strftime('%Y-%m-%d') + '.csv' , 'r') as f:
         readcsv = csv.reader(f, delimiter=',') 
         
         for price,size in zip([str(price) for price in final_tbl[TBL_PRICE]], [str(size) for size in final_tbl[TBL_VOLUME]]):
-        
             if any(price and size in str(row) for row in readcsv):
                 pass
             else:
-                csv_logger.info("%s,%s" %(price,size))           
+                csv_logger.info("%s,%s" %(price,size))
     return result
 
-app.layout = html.Div(id='main_container', children=[
-    
-    html.Div([
-        html.H2('CRYPTO WHALE WATCHING APP')
-        ]
-    ),
-    html.Div(id='graphs_Container', 
-        children =[ 
-            dcc.Graph(id='live-graph-' + exchange + "-" + ticker)
-            ]
-        ),
-    html.Div(
-        dcc.Interval(
-            id='main-interval-component',
-            interval=clientRefresh * 1000,
-            n_intervals=0
-                )
-            )
-        ]
-    )
+def load_orders():
+    try:
+        with open(DATA_DIR + 'orders/orders' + '_' + dt.datetime.today().strftime('%Y-%m-%d') + '.csv' , 'r') as f:
+            readcsv = csv.reader(f, delimiter=',')
+            orders = [row for row in  readcsv]
+    except:
+        orders = {}
+    return orders
 
-@app.callback(Output('graphs_Container', 'children'),
-              [Input('main-interval-component', 'n_intervals')])
+# Cyclic overtime graph update
+@app.callback(Output('whale_graph', 'children'),
+              [Input('interval-component', 'n_intervals')])
 def update_Site_data(n):
     cData = calc_data()
     children = [dcc.Graph(
@@ -493,17 +830,57 @@ def update_Site_data(n):
         figure=cData)]  
     return children
 
-# def run():
-#     app.run_server()
-    
-#     # app_run = threading.Thread(target =run_app)
-#     # app_run.daemon = True
-#     # app_run.start()
+# Cyclic upper data update function
+@app.callback([Output('timestamp', 'children'),
+               Output('whales_soitted', 'children'),
+               Output('symbol', 'children'),
+               Output('state', 'children'),
+               Output('prevClosePrice', 'children'),
+               Output('volume', 'children'),
+               Output('volume24h', 'children'),
+               Output('turnover', 'children'),
+               Output('turnover24h', 'children'),
+               Output('highPrice', 'children'),
+               Output('lowPrice', 'children'),
+               Output('lastPrice', 'children'),
+               Output('bidPrice', 'children'),
+               Output('midPrice', 'children'),
+               Output('askPrice', 'children'),
+               Output('openInterest', 'children'),
+               Output('openValue', 'children'),
+               Output('markPrice', 'children')],
+              [Input('interval-component', 'n_intervals')])
 
-#     # while ws.ws.sock.connected:
-#     #     threading.Timer(60, ws.reset).start()
-#     #     sleep(30)
+def update_metrics(n):
+    # Update today
+    schedule.run_pending()
 
-   
+    statusData = ws.get_frontend_data()
+    orderList = [
+        ('There was a ' + order[3] + ' XBT order for ' + order[2] + ' USD at ' + order[1] + '\n') for order in load_orders()
+        ]
+    return [
+        str('Last updated: ' + dt.datetime.today().strftime('%Y-%m-%d')),
+        orderList,
+        statusData['symbol'],
+        statusData['state'],
+        statusData['prevClosePrice'],
+        statusData['volume'],
+        statusData['volume24h'],
+        statusData['turnover'],
+        statusData['turnover24h'],
+        statusData['highPrice'],
+        statusData['lowPrice'], 
+        statusData['lastPrice'],
+        statusData['bidPrice'],
+        statusData['midPrice'],
+        statusData['askPrice'],
+        statusData['openInterest'],
+        statusData['openValue'],
+        statusData['markPrice']
+    ]
+
+# Main
 if __name__ == '__main__':
-    app.run_server()
+    app.server.run(host= '0.0.0.0', debug=True, threaded= True)
+
