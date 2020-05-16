@@ -126,6 +126,14 @@ app.layout = html.Div(
                     ),
                     href="https://quan.digital",
                     className="two columns"
+                ),
+                html.A(
+                    html.Button(
+                        "GitHub",
+                        id="github"
+                    ),
+                    href="https://github.com/quan-digital/whale-watcher",
+                    className="two columns"
                 )
             ],
             id="header",
@@ -168,9 +176,9 @@ app.layout = html.Div(
 
                                 html.Div(
                                     [
-                                        html.P("Previous Close Price"),
+                                        html.P("High Price"),
                                         html.H6(
-                                            id="prevClosePrice",
+                                            id="highPrice",
                                             className="info_text"
                                         )
                                     ],
@@ -180,9 +188,9 @@ app.layout = html.Div(
 
                                 html.Div(
                                     [
-                                        html.P("Volume"),
+                                        html.P("Mark Price"),
                                         html.H6(
-                                            id="volume",
+                                            id="markPrice",
                                             className="info_text"
                                         )
                                     ],
@@ -192,9 +200,9 @@ app.layout = html.Div(
 
                                 html.Div(
                                     [
-                                        html.P("Volume 24h"),
+                                        html.P("Ask Price"),
                                         html.H6(
-                                            id="volume24h",
+                                            id="askPrice",
                                             className="info_text"
                                         )
                                     ],
@@ -216,29 +224,49 @@ app.layout = html.Div(
 
                                 html.Div(
                                     [
-                                        html.P("Turn Over 24h"),
+                                        html.P("Volume"),
                                         html.H6(
-                                            id="turnover24h",
+                                            id="volume",
                                             className="info_text"
                                         )
                                     ],
                                     id="",
                                     className="pretty_container"
                                 ),
-
+                                html.Div(
+                                    [
+                                        html.P("Open Interest"),
+                                        html.H6(
+                                            id="openInterest",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
+                                html.Div(
+                                    [
+                                        html.P("Previous Close Price"), 
+                                        html.H6(
+                                            id="prevClosePrice",
+                                            className="info_text"
+                                        )
+                                    ],
+                                    id="",
+                                    className="pretty_container"
+                                ),
                             ],
                             id="btcInfo",
                             className="row"
                         ),
-
                         # Second info row
                         html.Div(
                             [
                                 html.Div(
                                     [
-                                        html.P("High Price"),
+                                        html.P("Mid Price"),
                                         html.H6(
-                                            id="highPrice",
+                                            id="midPrice",
                                             className="info_text"
                                         )
                                     ],
@@ -284,9 +312,9 @@ app.layout = html.Div(
 
                                 html.Div(
                                     [
-                                        html.P("Mid Price"), 
+                                        html.P("Turn Over 24h"),
                                         html.H6(
-                                            id="midPrice",
+                                            id="turnover24h",
                                             className="info_text"
                                         )
                                     ],
@@ -296,21 +324,9 @@ app.layout = html.Div(
 
                                 html.Div(
                                     [
-                                        html.P("Ask Price"),
+                                        html.P("Volume 24h"),
                                         html.H6(
-                                            id="askPrice",
-                                            className="info_text"
-                                        )
-                                    ],
-                                    id="",
-                                    className="pretty_container"
-                                ),
-
-                                html.Div(
-                                    [
-                                        html.P("Open Interest"),
-                                        html.H6(
-                                            id="openInterest",
+                                            id="volume24h",
                                             className="info_text"
                                         )
                                     ],
@@ -328,18 +344,6 @@ app.layout = html.Div(
                                     id="",
                                     className="pretty_container"
                                 ),
-                                html.Div(
-                                    [
-                                        html.P("Mark Price"),
-                                        html.H6(
-                                            id="markPrice",
-                                            className="info_text"
-                                        )
-                                    ],
-                                    id="",
-                                    className="pretty_container"
-                                ),
-
                             ],
                             id="infoContainer",
                             className="row"
@@ -804,11 +808,12 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
     with open(DATA_DIR + 'orders/orders' + '_' + dt.datetime.today().strftime('%Y-%m-%d') + '.csv' , 'r') as f:
         readcsv = csv.reader(f, delimiter=',') 
         
-        for price,size in zip([str(price) for price in final_tbl[TBL_PRICE]], [str(size) for size in final_tbl[TBL_VOLUME]]):
-            if any(price and size in str(row) for row in readcsv):
+        for ozip in zip([str(price) for price in final_tbl[TBL_PRICE]], [str(size) for size in final_tbl[TBL_VOLUME]] , [str(oid) for oid in fulltbl['address']]):
+            if any(ozip[2] in str(row) for row in readcsv):
                 pass
             else:
-                csv_logger.info("%s,%s" %(price,size))
+                csv_logger.info("%s,%s,%s,%s" %(ozip[0], ozip[1], ozip[2], 'BID' if float(ozip[0]) > mp else 'ASK'))
+                  
     return result
 
 def load_orders():

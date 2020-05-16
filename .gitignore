@@ -150,3 +150,6 @@ static
 
 # VSCode
 .vscode
+
+# Telegram Bot
+telegrambot.py
