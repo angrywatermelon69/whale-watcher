@@ -6,13 +6,13 @@ The app is hosted online [here](https://www.quan.digital).
 If you want more info about Quan Digital, you can reach out to us [here](https://www.quan.digital). 
 
 Read the User Guide section to learn more about how to enjoy the features made available in the app. 
-![screenshot1]()
+![screenshot1](https://github.com/quan-digital/whale-watcher/blob/master/screenshot/screenshot1.png)
 
 ## What is the purpose of this app?
 
 In their plataform, BitMEX allow users to use the merket depht chart, however this chart don't show where the volume come from and in how many orders, thus it could be from a large number of individuals who have placed orders or a few whales seeking to manipulate the market with large orders.
 
-![screenshot2]()
+![screenshot2](https://github.com/quan-digital/whale-watcher/blob/master/screenshot/screenshot2.png)
 
 This difference is important when we analise the impacts of  how quickly the whales could influence the merket depth. This app allows the user to access that information, by focusing on individual limit orders, emphasizing the largest orders. Enabling the user to spot whales that may be manipulating the present price.
 
@@ -25,7 +25,7 @@ The app use a algorithmic definition to spots a type of whales:
 
 In addition to the main views which provide a quickly  information about the largest orders, users can zoom in on particular sections of the order book, or to take better advantage of the tooltip capabilities of the Plotly visualization. There are often times when bubbles overlap themselves, when this happens, simply zoom the visualization in on a particular area to separate the two in a more detailed view. An example of the tooltip functionalities for the single whales can be seen via the screenshots below.
 
-![screenshot3]()
+![screenshot3](https://github.com/quan-digital/whale-watcher/blob/master/screenshot/screenshot3.png)
 
 
 ## User Guide and Contribution Rules
