@@ -17,11 +17,11 @@ In their plataform, BitMEX allow users to use the merket depht chart, however th
 This difference is important when we analise the impacts of  how quickly the whales could influence the merket depth. This app allows the user to access that information, by focusing on individual limit orders, emphasizing the largest orders. Enabling the user to spot whales that may be manipulating the present price.
 
 The app use a algorithmic definition to spots a type of whales:
-     * One large order at a single price-point.
-     * Example: 250XBT for sale at $9000 via 1 unique order.
-     * Represented via a bubble in the visualization.
-     * Tooltip includes order price-point, volume, and number of unique orders
-     * By default, the algorithm used displays those orders that make up >= 1% of the volume of the order book shown in the +/-5% from present market price.
+* One large order at a single price-point.
+* Example: 250XBT for sale at $9000 via 1 unique order.
+* Represented via a bubble in the visualization.
+* Tooltip includes order price-point, volume, and number of unique orders
+* By default, the algorithm used displays those orders that make up >= 1% of the volume of the order book shown in the +/-5% from present market price.
 
 In addition to the main views which provide a quickly  information about the largest orders, users can zoom in on particular sections of the order book, or to take better advantage of the tooltip capabilities of the Plotly visualization. There are often times when bubbles overlap themselves, when this happens, simply zoom the visualization in on a particular area to separate the two in a more detailed view. An example of the tooltip functionalities for the single whales can be seen via the screenshots below.
 

@@ -68,27 +68,6 @@ def setup_db(name, extension='.csv', getPath = False):
     else:
         return logger
 
-def update_today():
-    today = dt.datetime.today().strftime('%Y-%m-%d')
-    return 
-schedule.every(60).seconds.do(update_today)
-
-layout = dict(
-    autosize=True,
-    automargin=True,
-    margin=dict(
-        l=30,
-        r=30,
-        b=20,
-        t=40
-    ),
-    hovermode="closest",
-    plot_bgcolor="#F9F9F9",
-    paper_bgcolor='#F9F9F9',
-    legend=dict(font=dict(size=10), orientation='h'),
-    title='Dashboard - Running',
-)
-
 # Create app layout
 app.layout = html.Div(
     [
@@ -446,7 +425,7 @@ def round_sig(x, sig=3, overwrite=0, minimum=0):
         else:
             return round(x, digits)
 
-def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
+def calc_data(range=0.05, maxSize=32, minVolumePerc=0.015, ob_points=60):
 
     order_book = ws.get_current_book()
     ask_tbl = pd.DataFrame(data=order_book['asks'], columns=[
@@ -529,6 +508,7 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
 
     fulltbl = bid_tbl.append(ask_tbl)  # append the buy and sell side tables to create one cohesive table
     minVolume = fulltbl[TBL_VOLUME].sum() * minVolumePerc  # Calc minimum Volume for filtering
+    volumewhale = fulltbl[TBL_VOLUME].sum()
     fulltbl = fulltbl[
         (fulltbl[TBL_VOLUME] >= minVolume)]  # limit our view to only orders greater than or equal to the minVolume size
 
@@ -812,8 +792,8 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60):
             if any(ozip[2] in str(row) for row in readcsv):
                 pass
             else:
-                csv_logger.info("%s,%s,%s,%s" %(ozip[0], ozip[1], ozip[2], 'BID' if float(ozip[0]) > mp else 'ASK'))
-                  
+                csv_logger.info("%s,%s,%s,%s,%s" %(ozip[0], ozip[1], ozip[2], 'BID' if float(ozip[0]) > mp else 'ASK', float(ozip[1])/volumewhale))
+                continue
     return result
 
 def load_orders():

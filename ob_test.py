@@ -189,15 +189,15 @@ def run():
         
         
         # try:
-        with open(DATA_DIR + 'orders/orders' + '_' + today + '.json') as f:
-            orders = json.load(f)
+        # with open(DATA_DIR + 'orders/orders' + '_' + today + '.json') as f:
+        #     orders = json.load(f)
             # except:
             #     orders = {}
             
-        logger.info(orders)
+        logger.info(ws.data['trade'][-1]['price'])
         
         # sleep(3)
-        return 
+        # return 
 
 def setup_logger():
     # Prints logger info to terminal

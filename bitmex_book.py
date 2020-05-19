@@ -176,8 +176,8 @@ class BitMEXBook:
 
     def get_market_price(self):
         if OTHER_DATA:
-            last_trade = self.data['trade'][-1]
-            return last_trade['price']
+            last_trade = self.data['trade'][-1]['price']
+            return last_trade
         else:
             min_ask = min(value[0]['price'] for value in self._asks.values())
             max_bid = max(value[0]['price'] for value in self._bids.values())
@@ -219,7 +219,7 @@ class BitMEXBook:
     def get_ask(self):
         return self._asks.min_key()
 
-    # Get ask given price
+    # Get ask given id
     def get_asks(self, id):
         return self._asks.get(id)
 
@@ -235,7 +235,7 @@ class BitMEXBook:
     def get_bid(self):
         return self._bids.max_key()
 
-    # Get bid given price
+    # Get bid given id
     def get_bids(self, id):
         return self._bids.get(id)
 
