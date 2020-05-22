@@ -35,6 +35,13 @@ The size of each observation is determined algorithmically using a transformatio
 
 All of these limitations--i.e. the volume minimum, the order book limitations, etc., are parameterized within the dashAPP.py code and thus can be easily changed if so desired.
 
-Anyone interested with Python 3.6 installed can download the dashAPP.py or clone the repo and run the app locally, just check to be sure you have the few required modules installed.
+Anyone interested with Python 3.6 installed can download the dashAPP.py or clone the repo and run the app locally, just check to be sure you have the few required modules installed. Once you have Python 3.6 installed, open up a Terminal and type:
+
+    pip install -r /path/to/requirements.txt
+
+Once its finished type:
+
+    python dashAPP.py
+
 
 All are welcome to contribute issues / pull-requests to the codebase. All you have to do is include a detailed description of your contribution and that your code is thoroughly-commented.

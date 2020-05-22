@@ -30,6 +30,7 @@ from decimal import Decimal
 from bintrees import RBTree
 from operator import itemgetter
 from tqdm import tqdm
+import bitmex
 
 # Websocket timeout in seconds
 CONN_TIMEOUT = 5
@@ -120,7 +121,6 @@ class BitMEXBook:
     # ----------------------Bitmex Data Fields-------------------------------------------------
     # -----------------------------------------------------------------------------------------
     # -----------------------------------------------------------------------------------------
-
 
     def get_instrument(self):
         '''Get the raw instrument data for this symbol.'''

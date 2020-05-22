@@ -1,0 +1,6 @@
+requests==2.18.4
+dash==1.12.0
+websocket-client==0.57.0
+pandas==1.0.3
+bintrees==2.1.0
+tqdm==4.46.0
