@@ -8,8 +8,14 @@ import sys
 import datetime as dt
 DATA_DIR = 'data/'
 today = dt.datetime.today().strftime('%Y-%m-%d')
+import bitmex
 
 # Basic use of websocket.
+def getLastPrice():
+    result = bitmex.bitmex(test=False).Instrument.Instrument_get(symbol='XBTUSD', reverse=True).result()[0][0]['timestamp']
+    return result
+
+
 def run():
     logger = setup_logger()
 
@@ -29,10 +35,16 @@ def run():
             # except:
             #     orders = {}
         
-        logger.info()
         
-        sleep(3)
+        logger.info(ws._asks)
+        
+        # logger.info(getLastPrice())
+        # logger.info(dt.datetime.utcnow())
+        # logger.info('---------------------------------')
+        sleep(1)
         # return 
+
+
 
 def setup_logger():
     # Prints logger info to terminal

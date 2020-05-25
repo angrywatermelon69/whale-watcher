@@ -25,12 +25,10 @@ from time import sleep
 import json
 import logging
 import urllib
-import math
 from decimal import Decimal
 from bintrees import RBTree
 from operator import itemgetter
 from tqdm import tqdm
-import bitmex
 
 # Websocket timeout in seconds
 CONN_TIMEOUT = 5
@@ -38,28 +36,12 @@ CONN_TIMEOUT = 5
 # It's recommended not to grow a table larger than 200. Helps cap memory usage.
 MAX_TABLE_LEN = 200
 
-# Get other data besides orderBookL2 (instrument, quote and trade). 
-# Set to 'False' to reduce bandwidth and optimize performance. 
-OTHER_DATA = True
-
-# When True, data will only be handled as RBTrees (bids and asks).
-# When False, orderBookL2 data will also be stored as dict.
-RB_ONLY = False
-
-# Satoshi to XBT converter
-def XBt_to_XBT(XBt):
-    return float(XBt) / 100000000
-
 class BitMEXBook:
 
     def __init__(self, endpoint="https://www.bitmex.com/api/v1", symbol='XBTUSD'):
         '''Connect to the websocket and initialize data stores.'''
         self.logger = logging.getLogger(__name__)
         self.logger.debug("Initializing WebSocket.")
-
-        # If we're getting other websocket data, RB_ONLY must be false
-        if OTHER_DATA and RB_ONLY:
-            raise Exception('OTHER_DATA and RB_ONLY can\'t be both true.')
 
         self.endpoint = endpoint
         self.symbol = symbol
@@ -73,7 +55,7 @@ class BitMEXBook:
         # We can subscribe right in the connection querystring, so let's build that.
         # Subscribe to all pertinent endpoints
         wsURL = self.__get_url()
-        self.logger.info("Connecting to %s" % wsURL)
+        self.logger.debug("Connecting to %s" % wsURL)
         self.__connect(wsURL, symbol)
         self.logger.info('Connected to WS, waiting for partials.')
 
@@ -89,7 +71,7 @@ class BitMEXBook:
         self.exited = False
 
         wsURL = self.__get_url()
-        self.logger.info("Connecting to URL -- %s" % wsURL)
+        self.logger.debug("Connecting to URL -- %s" % wsURL)
         self.__connect(wsURL, self.symbol)
         self.logger.info('Connected to WS, waiting for partials.')
 
@@ -117,74 +99,7 @@ class BitMEXBook:
         self.exited = True
         self.ws.close()
 
-    # -----------------------------------------------------------------------------------------
-    # ----------------------Bitmex Data Fields-------------------------------------------------
-    # -----------------------------------------------------------------------------------------
-    # -----------------------------------------------------------------------------------------
-
-    def get_instrument(self):
-        '''Get the raw instrument data for this symbol.'''
-        if OTHER_DATA:
-            instrument = self.data['instrument'][0]
-            return instrument
-        else:
-            return None
-
-    def get_frontend_data(self):
-        instrument = self.data['instrument'][0]
-        data = {
-        "symbol": instrument['symbol'],
-        "state": instrument['state'],
-        "prevClosePrice": instrument['prevClosePrice'],
-        "volume": instrument['volume'],
-        "volume24h": instrument['volume24h'],
-        "turnover": instrument['turnover'],
-        "turnover24h": instrument['turnover24h'],
-        "highPrice": instrument['highPrice'],
-        "lowPrice": instrument['lowPrice'],
-        "lastPrice": instrument['lastPrice'],
-        "bidPrice": instrument['bidPrice'],
-        "midPrice": instrument['midPrice'],
-        "askPrice": instrument['askPrice'],
-        "openInterest": instrument['openInterest'],
-        "openValue": instrument['openValue'],
-        "markPrice": instrument['markPrice'],
-        }
-        return data
-        
-    def get_ticker(self):
-        '''Return a ticker object. Generated from quote and trade.'''
-        if OTHER_DATA:
-            lastQuote = self.data['quote'][-1]
-            lastTrade = self.data['trade'][-1]
-            ticker = {
-                "last": lastTrade['price'],
-                "buy": lastQuote['bidPrice'],
-                "sell": lastQuote['askPrice'],
-                "mid": (float(lastQuote['bidPrice'] or 0) + float(lastQuote['askPrice'] or 0)) / 2
-            }
-
-            # The instrument has a tickSize. Use it to round values.
-            instrument = self.data['instrument'][0]
-            return {k: toNearest(float(v or 0), instrument['tickSize']) for k, v in ticker.items()}
-        else:
-            return None
-
-    def market_depth(self):
-        '''Get whole market depth (orderbook). Returns all levels.'''
-        return self.data['orderBookL2']
-
-    def get_market_price(self):
-        if OTHER_DATA:
-            last_trade = self.data['trade'][-1]['price']
-            return last_trade
-        else:
-            min_ask = min(value[0]['price'] for value in self._asks.values())
-            max_bid = max(value[0]['price'] for value in self._bids.values())
-            return (min_ask+max_bid)/2
-
     ### Main orderbook function
-
     def get_current_book(self):
         result = {
             'asks': [],
@@ -344,19 +259,16 @@ class BitMEXBook:
             conn_timeout -= 1
         if not conn_timeout:
             self.logger.error("Couldn't connect to WS! Exiting.")
-            self.exit()
-            raise websocket.WebSocketTimeoutException('Couldn\'t connect to WS! Exiting.')
+            # self.exit()
+            # raise websocket.WebSocketTimeoutException('Couldn\'t connect to WS! Exiting.')
+            self.reset()
 
     def __get_url(self):
         '''
         Generate a connection URL. We can define subscriptions right in the querystring.
         Most subscription topics are scoped by the symbol we're listening to.
         '''
-        if OTHER_DATA:
-            symbolSubs = ["instrument", "orderBookL2", "quote", "trade"]
-        else:
-            symbolSubs = ["orderBookL2"]
-
+        symbolSubs = ["orderBookL2"]
         subscriptions = [sub + ':' + self.symbol for sub in symbolSubs]
 
         urlParts = list(urllib.parse.urlparse(self.endpoint))
@@ -367,16 +279,11 @@ class BitMEXBook:
     def __wait_for_symbol(self, symbol):
         '''On subscribe, this data will come down. Wait for it.'''
         pbar = tqdm(total=160)
-        if OTHER_DATA:
-            # Wait for every subscription
-            while not {'orderBookL2', 'instrument', 'trade', 'quote'} <= set(self.data):
-                sleep(0.1)
-                pbar.update(3)
-        else:
-            # Wait until data reaches our RBTrees
-            while self._asks.is_empty() and self._bids.is_empty():
-                sleep(0.1)
-                pbar.update(3)
+        
+        # Wait until data reaches our RBTrees
+        while self._asks.is_empty() and self._bids.is_empty():
+            sleep(0.1)
+            pbar.update(3)
         pbar.close()
 
     def __send_command(self, command, args=None):
@@ -388,58 +295,14 @@ class BitMEXBook:
     def __on_message(self, message):
         '''Handler for parsing WS messages.'''
         message = json.loads(message)
-        self.logger.debug(json.dumps(message))
+        # self.logger.debug(json.dumps(message))
 
-        table = message.get("table")
-        action = message.get("action")
+        table = message['table'] if 'table' in message else None
+        action = message['action'] if 'action' in message else None
+        # table = message.get("table")
+        # action = message.get("action")
+        
         try:
-            if not RB_ONLY:
-                if 'subscribe' in message:
-                    self.logger.debug("Subscribed to %s." % message['subscribe'])
-                elif action:
-
-                    if table not in self.data:
-                        self.data[table] = []
-
-                    # There are four possible actions from the WS:
-                    # 'partial' - full table image
-                    # 'insert'  - new row
-                    # 'update'  - update row
-                    # 'delete'  - delete row
-
-                    if action == 'partial':
-                        self.logger.debug("%s: partial" % table)
-                        self.data[table] = message['data']
-                        # Keys are communicated on partials to let you know how to uniquely identify
-                        # an item. We use it for updates.
-                        self.keys[table] = message['keys']
-
-                    elif action == 'insert':
-                        self.logger.debug('%s: inserting %s' % (table, message['data']))
-                        self.data[table] += message['data']
-                        # Limit the max length of the table to avoid excessive memory usage.
-                        # Don't trim orders because we'll lose valuable state if we do.
-                        if table not in ['orderBookL2'] and len(self.data[table]) > MAX_TABLE_LEN:
-                            self.data[table] = self.data[table][MAX_TABLE_LEN // 2:]
-
-                    elif action == 'update':
-                        self.logger.debug('%s: updating %s' % (table, message['data']))
-                        # Locate the item in the collection and update it.
-                        for updateData in message['data']:
-                            item = find_by_keys(self.keys[table], self.data[table], updateData)
-                            if not item:
-                                return  # No item found to update. Could happen before push
-                            item.update(updateData)
-
-                    elif action == 'delete':
-                        self.logger.debug('%s: deleting %s' % (table, message['data']))
-                        # Locate the item in the collection and remove it.
-                        for deleteData in message['data']:
-                            item = find_by_keys(self.keys[table], self.data[table], deleteData)
-                            self.data[table].remove(item)
-                    else:
-                        raise Exception("Unknown action: %s" % action)
-
             # RBTrees for orderBook
             if table == 'orderBookL2':
                 # For every order received
@@ -489,9 +352,6 @@ class BitMEXBook:
         '''Called on websocket close.'''
         self.logger.info('Websocket Closed')
 
-
-
-
 # Utility method for finding an item in the store.
 # When an update comes through on the websocket, we need to figure out which item in the array it is
 # in order to match that item.
@@ -502,14 +362,3 @@ def find_by_keys(keys, table, matchData):
     for item in table:
         if all(item[k] == matchData[k] for k in keys):
             return item
-
-# Given a number, round it to the nearest tick. 
-# Use this after adding/subtracting/multiplying numbers.
-# More reliable than round()
-def toNearest(num, tickSize = 1):
-    tickDec = Decimal(str(tickSize))
-    return float((Decimal(round(num / tickSize, 0)) * tickDec))
-
-# Satoshi to XBT converter
-def XBt_to_XBT(XBt):
-    return float(XBt) / 100000000

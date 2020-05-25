@@ -2,7 +2,7 @@
 
 This is a Python-based Dash app developed by Quan Digital that meant to track whale activity in the pair XBTUSD on BitMEX's orderbook. This document aims to explain the purpose and functionality of this project. You can contribute to the improvement of this project by calling out issues, requesting new features, and submitting pull requests.
 
-The app is hosted online [here](https://www.quan.digital). 
+The app is hosted online [here](http://ec2-34-244-232-144.eu-west-1.compute.amazonaws.com). 
 If you want more info about Quan Digital, you can reach out to us [here](https://www.quan.digital). 
 
 Read the User Guide section to learn more about how to enjoy the features made available in the app. 

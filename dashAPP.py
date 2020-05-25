@@ -12,23 +12,22 @@ import numpy as np
 import logging
 from logging.handlers import RotatingFileHandler
 from decimal import Decimal
-from bitmex_book import BitMEXBook
-from time import sleep
-
 from threading import Thread
 import os
 import sys 
 import bitmex
 
+from bitmex_book import BitMEXBook
 # Creating webapp
 app = dash.Dash(__name__)
 server = app.server
 
 # creating variables to facilitate later parameterization
 ws = BitMEXBook()
-
+http = bitmex.bitmex(test=False)
 DATA_DIR = 'data/'
-clientRefresh = 5
+
+clientRefresh = 3
 
 def setup_db(name, extension='.csv', getPath = False):
     """Setup writer that formats data to csv, supports multiple instances with no overlap."""
@@ -53,9 +52,27 @@ def setup_db(name, extension='.csv', getPath = False):
     else:
         return logger
 
-def getLastPrice():
-        result = bitmex.bitmex(test=False).Trade.Trade_get(symbol='XBTUSD', reverse=True).result()[0][0]['price']
-        return result
+def get_frontend_data():
+        instrument = http.Instrument.Instrument_get(symbol='XBTUSD', reverse=True).result()[0][0]
+        data = {
+        "symbol": instrument['symbol'],
+        "state": instrument['state'],
+        "prevClosePrice": instrument['prevClosePrice'],
+        "volume": instrument['volume'],
+        "volume24h": instrument['volume24h'],
+        "turnover": instrument['turnover'],
+        "turnover24h": instrument['turnover24h'],
+        "highPrice": instrument['highPrice'],
+        "lowPrice": instrument['lowPrice'],
+        "lastPrice": instrument['lastPrice'],
+        "bidPrice": instrument['bidPrice'],
+        "midPrice": instrument['midPrice'],
+        "askPrice": instrument['askPrice'],
+        "openInterest": instrument['openInterest'],
+        "openValue": instrument['openValue'],
+        "markPrice": instrument['markPrice'],
+        }
+        return data
 
 def create_dirs():
     '''Creates data directories'''   
@@ -424,7 +441,7 @@ def round_sig(x, sig=3, overwrite=0, minimum=0):
         else:
             return round(x, digits)
 
-def calc_data(range=0.05, maxSize=32, minVolumePerc=0.015, ob_points=60, noDouble = False):
+def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60, noDouble = False):
  
     order_book = ws.get_current_book()
     ask_tbl = pd.DataFrame(data=order_book['asks'], columns=[
@@ -501,7 +518,7 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.015, ob_points=60, noDoubl
         last_bid = current_bid_border
 
     # Get Market Price
-    mp = round_sig(ws.get_market_price(),3, 0, 2)
+    mp = round_sig(get_frontend_data()['lastPrice'],3, 0, 2)
     
     bid_tbl = bid_tbl.iloc[::-1]  # flip the bid table so that the merged full_tbl is in logical order
 
@@ -837,7 +854,7 @@ def update_Site_data(n):
             [Input('interval-component', 'n_intervals')])
 def update_metrics(n):
     
-    statusData = ws.get_frontend_data()
+    statusData = get_frontend_data()
     orderList = [
         ('There was a ' + order[3] + ' XBT order for ' + order[2] + ' USD at ' + order[1] + '\n') for order in load_orders()
         ]
