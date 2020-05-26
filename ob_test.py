@@ -36,7 +36,7 @@ def run():
             #     orders = {}
         
         
-        logger.info(ws._asks)
+        logger.info(ws.init())
         
         # logger.info(getLastPrice())
         # logger.info(dt.datetime.utcnow())

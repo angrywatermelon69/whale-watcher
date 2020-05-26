@@ -27,7 +27,7 @@ ws = BitMEXBook()
 http = bitmex.bitmex(test=False)
 DATA_DIR = 'data/'
 
-clientRefresh = 3
+clientRefresh = 5
 
 def setup_db(name, extension='.csv', getPath = False):
     """Setup writer that formats data to csv, supports multiple instances with no overlap."""
@@ -79,6 +79,7 @@ def create_dirs():
     try:
         os.mkdir('data')
         os.mkdir(DATA_DIR + 'orders')
+        os.mkdir(DATA_DIR + 'telegram')
         print("Directories created.")    
         
     except FileExistsError:
@@ -134,11 +135,9 @@ app.layout = html.Div(
             id="header",
             className='row',
         ),
-
         # Upper page components
         html.Div(
             [
-                
                 html.Div(
                     [   
                         # First info row
@@ -168,7 +167,6 @@ app.layout = html.Div(
                                     id="",
                                     className="pretty_container"
                                 ),
-
                                 html.Div(
                                     [
                                         html.P("High Price"),
@@ -180,7 +178,6 @@ app.layout = html.Div(
                                     id="",
                                     className="pretty_container"
                                 ),
-
                                 html.Div(
                                     [
                                         html.P("Mark Price"),
@@ -192,7 +189,6 @@ app.layout = html.Div(
                                     id="",
                                     className="pretty_container"
                                 ),
-
                                 html.Div(
                                     [
                                         html.P("Ask Price"),
@@ -204,7 +200,6 @@ app.layout = html.Div(
                                     id="",
                                     className="pretty_container"
                                 ),
-
                                 html.Div(
                                     [
                                         html.P("Turn Over"),
@@ -216,7 +211,6 @@ app.layout = html.Div(
                                     id="",
                                     className="pretty_container"
                                 ),
-
                                 html.Div(
                                     [
                                         html.P("Volume"),
@@ -268,7 +262,6 @@ app.layout = html.Div(
                                     id="",
                                     className="pretty_container"
                                 ),
-
                                 html.Div(
                                     [
                                         html.P("Low Price"),
@@ -280,7 +273,6 @@ app.layout = html.Div(
                                     id="",
                                     className="pretty_container"
                                 ),
-
                                 html.Div(
                                     [
                                         html.P("Last Price"), 
@@ -292,7 +284,6 @@ app.layout = html.Div(
                                     id="",
                                     className="pretty_container"
                                 ),
-
                                 html.Div(
                                     [
                                         html.P("Bid Price"), 
@@ -304,7 +295,6 @@ app.layout = html.Div(
                                     id="",
                                     className="pretty_container"
                                 ),
-
                                 html.Div(
                                     [
                                         html.P("Turn Over 24h"),
@@ -316,7 +306,6 @@ app.layout = html.Div(
                                     id="",
                                     className="pretty_container"
                                 ),
-
                                 html.Div(
                                     [
                                         html.P("Volume 24h"),
@@ -343,7 +332,6 @@ app.layout = html.Div(
                             id="infoContainer",
                             className="row"
                         ),
-
                         # graph overtime plot
                         html.Div(id='whale_graph', 
                         children =[ 
@@ -381,7 +369,6 @@ app.layout = html.Div(
                             'align': 'left',
                             }
                         ),
-
                     html.P(
                     'Pyno Dashboard v0.1 - © Quan Digital 2020',
                     style={
@@ -395,7 +382,6 @@ app.layout = html.Div(
                     id = 'footer',
                     className="row"
                     ),
-
                     # Update loop component 
                     dcc.Interval(
                         id='interval-component',
@@ -441,7 +427,7 @@ def round_sig(x, sig=3, overwrite=0, minimum=0):
         else:
             return round(x, digits)
 
-def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60, noDouble = False):
+def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60, noDouble = False, minVolSpot = 0.02):
  
     order_book = ws.get_current_book()
     ask_tbl = pd.DataFrame(data=order_book['asks'], columns=[
@@ -802,14 +788,18 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60, noDouble
     csv_logger = setup_db('orders')
     orders = zip([str(price) for price in final_tbl['price']], 
                  [str(size) for size in final_tbl['volume']], 
-                 [str(oid) for oid in fulltbl['address']]
+                 [str(oid) for oid in fulltbl['address']],
+                 [str(size/volumewhale) for size in final_tbl['volume']]
                  )
     for order in orders:
-        if order[2] in [id[4] for id in load_orders()]:
+        if order[2] in [oid[4] for oid in load_orders()]:
             pass
         else:
-            csv_logger.info("%s,%s,%s" %(order[0], order[1], order[2]))
-            continue   
+            if float(order[3]) > minVolSpot:
+                csv_logger.info("%s,%s,%s, %s" %(order[0], order[1], order[2], order[3]))
+                continue
+            else: 
+                pass   
     return result
 
 def load_orders():
