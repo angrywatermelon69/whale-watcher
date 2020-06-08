@@ -87,12 +87,13 @@ def create_dirs():
     try:
         os.mkdir('data')
         os.mkdir(DATA_DIR + 'orders')
-        os.mkdir(DATA_DIR + 'liquidation')
-        os.mkdir(DATA_DIR + 'liquidation_telegram')
-        os.mkdir(DATA_DIR + 'order_telegram')
-        os.mkdir(DATA_DIR + 'announcement')
-        os.mkdir(DATA_DIR + 'announcements_telegram')
-
+        
+        # os.mkdir(DATA_DIR + 'liquidation')
+        # os.mkdir(DATA_DIR + 'announcement')
+        
+        # os.mkdir(DATA_DIR + 'order_telegram')
+        # os.mkdir(DATA_DIR + 'liquidation_telegram')
+        # os.mkdir(DATA_DIR + 'announcements_telegram')
         print("Directories created.")    
          
     except FileExistsError:
@@ -363,19 +364,6 @@ app.layout = html.Div(
         html.Div([
             html.Div([
                 html.Div([
-                    html.H4('Liquidations:'),
-                    html.H6(
-                        className="info_text",
-                        id = "liquidationList",
-                        style={'whiteSpace': 'pre-wrap'}
-                        )
-                    ],
-                    className= 'pretty_container'
-                    ),],
-                    className= 'pretty_container eight columns'
-                    ),
-            html.Div([
-                html.Div([
                     html.H4('Whales Price Levels:'),
                     html.H6(
                         className="info_text",
@@ -387,7 +375,21 @@ app.layout = html.Div(
                     ),
                 ],
                 className= 'pretty_container eight columns'
-                )   
+                ), 
+            html.Div([
+                html.Div([
+                    html.H4('Liquidations:'),
+                    html.H6(
+                        className="info_text",
+                        id = "liquidationList",
+                        style={'whiteSpace': 'pre-wrap'}
+                        )
+                    ],
+                    className= 'pretty_container'
+                    ),
+                ],
+                className= 'pretty_container eight columns'
+                ),  
             ],
             className="row"                
             ),
@@ -401,7 +403,7 @@ app.layout = html.Div(
                     }
                 ),
             html.P(
-                '* Price Levels that make up >= 3% of the volume of the order book shown in the +/-5% and 0.03% away from present market price.' ,
+                '* Price Levels that make up >= 3% of the volume of the order book shown in the +/-5% and 0.3% away from present market price.' ,
                 style={
                     'font-size': '1.75rem',
                     'color': '#F9F9F9',
@@ -692,7 +694,7 @@ def calc_data(range=0.05, maxSize=32, minVolumePerc=0.01, ob_points=60, minVolSp
         if order[2] in [oid[4] for oid in load_orders()]:
             pass
         else:
-            if (float(order[3]) > minVolSpot) and (float(order[0]) not in range(marketPrice*0.00097, marketPrice*1.0003)):
+            if (float(order[3]) > minVolSpot) and (float(order[0]) not in np.arange(marketPrice*0.997,marketPrice*1.003, 0.1)):
                 csv_logger.info("%s,%s,%s,%s,%s" %(order[0], order[1], order[2], order[3], marketPrice))
                 continue
             else: 
@@ -910,22 +912,21 @@ def update_metrics(n):
     try:
         with open(DATA_DIR + 'liquidation/liquidation' + '_' + dt.datetime.today().strftime('%Y-%m-%d') + '.csv' , 'r') as f:
             readcsv = csv.reader(f, delimiter=',')
-            liquidations = [row for row in readcsv][1:]
-            liquidations = [liq for liq in liquidations if float(liq[6]) > 200000]
+            liquidations = [row for row in readcsv if float(row[6]) > 200000]
     except:
         liquidations = []   
     
     try:
         with open(DATA_DIR + 'announcements/announcements' + '_' + dt.today().strftime('%Y-%m-%d') + '.csv' , 'r') as f:
             readcsv = csv.reader(f, delimiter=',')
-            announcements = [row for row in readcsv][1:]
+            announcements = [row for row in readcsv]
     except:
         announcements = []
     
     liquidationList = ['('+ liq[1] +') Liquidated ' + ('Short: ' if liq[4] == ' Buy' else 'Long: ')  + str("{:,}".format(round(float(liq[6]), 2))) 
                         + ' Contracts at $' + str("{:,}".format(float(liq[5]))) + '\n'  for liq in liquidations]
 
-    orderList = ['('+ order[1] +') ' + order[3] + ' #XBT ' + ('BIDs' if float(order[2]) > float(order[6]) else 'ASKs') + 
+    orderList = ['('+ order[1] +') ' + order[3] + ' XBT ' + ('BIDs' if float(order[2]) > float(order[6]) else 'ASKs') + 
                     ' at $' + order[2] + ' level' +  '\n' for order in orders]
     
     announcementList = ['('+ anun[1] +') ' + anun[4] for anun in announcements]
@@ -977,8 +978,8 @@ if __name__ =='__main__':
         Thread(target= run_frontdata).start()
         Thread(target= run_calc_data).start()
         sleep(2)
-        # Thread(target= app.server.run(host= '0.0.0.0', threaded= True)).start
-        Thread(target = app.server.run(host= '0.0.0.0', threaded= True, port= '80')).start()
+        Thread(target= app.server.run(host= '0.0.0.0', threaded= True)).start
+        # Thread(target = app.server.run(host= '0.0.0.0', threaded= True, port= '80')).start()
         
     except (KeyboardInterrupt, SystemExit):
         sys.exit()
