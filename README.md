@@ -16,7 +16,7 @@ In their plataform, BitMEX allow users to use the merket depht chart, however th
 
 Thus, this app provides tools for the user access that information, by focusing on limit orders from orderbook, emphasizing the largest price levels. Enabling the user to see in an easy to understand graphic the largest price levels in a bigger range of present price, besides follow in real time updates including turnover , bid/ask prices, volume and liquidations from the orderbook.
 
-![screenshot4]()
+![screenshot4](https://github.com/quan-digital/whale-watcher/blob/master/screenshot/screenshot4.jpeg)
 
 The app use a algorithmic definition to spots a price level:
 * By default, the algorithm used displays those orders that make up >= 3% of the volume of the order book shown in the +/-5% from present market price.
