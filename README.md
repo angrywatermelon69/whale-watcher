@@ -19,13 +19,13 @@ Thus, this app provides tools for the user access that information, by focusing 
 ![screenshot4](https://github.com/quan-digital/whale-watcher/blob/master/screenshot/screenshot4.jpeg)
 
 The app use a algorithmic definition to spots a price level:
-* By default, the algorithm used displays those orders that make up >= 3% of the volume of the order book shown in the +/-5% from present market price.
+* By default, the algorithm used displays those levels that make up >= 3% of the volume of the order book shown in the +/-5% from present market price.
 * Represented via a bubble in the visualization.
 * Tooltip includes level price and volume.
 
 And for Liquidations:
 * Liquidations above 200,000.00 contracts.
-(For now, the liquidations and announcements code are prived because they work integrated with our telegram alert bots...)
+(For now, the liquidations and announcements code is prived...)
 
 In addition to the main views which provide a quickly  information about the largest levels. There are often times when bubbles overlap themselves, when this happens, simply zoom the visualization in on a particular area to separate the two in a more detailed view. 
 
